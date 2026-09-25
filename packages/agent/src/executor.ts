@@ -1,8 +1,8 @@
 import type { ContentBlock, SafeError, ToolStatus } from "@gx/contracts";
 import { getTool, parseArgs, type AnyTool } from "@gx/tools";
 
-export type Invocation = { id: string; status: ToolStatus; output: unknown; creditsMicro: bigint; error: SafeError | null };
-export type ToolOutcome = { status: "completed" | "failed" | "cancelled"; output?: unknown; creditsMicro: bigint; error?: SafeError };
+export type Invocation = { id: string; status: ToolStatus; output: unknown; creditsMicro: bigint; durationMs?: number | null; error: SafeError | null };
+export type ToolOutcome = { status: "completed" | "failed" | "cancelled"; output?: unknown; creditsMicro: bigint; durationMs?: number; error?: SafeError };
 
 /** Everything the executor needs from the outside world; the worker implements these with Postgres and Trigger.dev. */
 export interface ToolPorts {
@@ -10,17 +10,23 @@ export interface ToolPorts {
   upsert(i: { toolCallId: string; seq: number; name: string; input: unknown; estimateMicro: bigint }): Promise<Invocation>;
   dispatch(tool: AnyTool, toolInvocationId: string): Promise<ToolOutcome>;
   settle(toolInvocationId: string, creditsMicro: bigint): Promise<void>;
-  update(key: string, patch: { name: string; seq: number; status: ToolStatus; credits?: string; assetUrl?: string; error?: SafeError; label?: string }): void;
+  update(key: string, patch: { name: string; seq: number; status: ToolStatus; credits?: string; durationMs?: number; assetUrl?: string; error?: SafeError; label?: string }): void;
 }
 
 export type PendingCall = { key: string; seq: number; name: string; argsJson: string };
-export type ExecutedCall = { key: string; blocks: ContentBlock[]; llmContent: string; stop?: SafeError };
+export type ExecutedCall = { key: string; blocks: ContentBlock[]; llmContent: string; creditsMicro: bigint; stop?: SafeError };
 
-const failure = (key: string, error: SafeError, stop = false): ExecutedCall => ({
+const failure = (key: string, error: SafeError, stop = false, cost?: Pick<ToolOutcome, "creditsMicro" | "durationMs">): ExecutedCall => ({
   key,
-  blocks: [{ type: "tool_result", toolCallId: key, status: "failed", error }],
+  blocks: [{ type: "tool_result", toolCallId: key, status: "failed", error, ...costFields(cost) }],
   llmContent: JSON.stringify({ error: error.message }),
+  creditsMicro: cost?.creditsMicro ?? 0n,
   ...(stop && { stop: error }),
+});
+
+const costFields = (c?: Pick<ToolOutcome, "creditsMicro" | "durationMs">) => ({
+  ...(c && { creditsMicro: Number(c.creditsMicro) }),
+  ...(c?.durationMs != null && { durationMs: c.durationMs }),
 });
 
 async function executeOne(ports: ToolPorts, call: PendingCall): Promise<ExecutedCall> {
@@ -45,26 +51,27 @@ async function executeOne(ports: ToolPorts, call: PendingCall): Promise<Executed
 
   const outcome: ToolOutcome =
     inv.status === "completed" || inv.status === "failed" || inv.status === "cancelled"
-      ? { status: inv.status, output: inv.output, creditsMicro: inv.creditsMicro, error: inv.error ?? undefined }
+      ? { status: inv.status, output: inv.output, creditsMicro: inv.creditsMicro, durationMs: inv.durationMs ?? undefined, error: inv.error ?? undefined }
       : await ports.dispatch(tool, inv.id);
 
   if (outcome.creditsMicro > 0n) await ports.settle(inv.id, outcome.creditsMicro);
 
   if (outcome.status !== "completed") {
     const error = outcome.error ?? { code: outcome.status, message: `The tool ${outcome.status}.`, retryable: true };
-    ports.update(call.key, { name: tool.name, seq: call.seq, status: outcome.status, error, credits: outcome.creditsMicro.toString() });
-    return failure(call.key, error);
+    ports.update(call.key, { name: tool.name, seq: call.seq, status: outcome.status, error, credits: outcome.creditsMicro.toString(), durationMs: outcome.durationMs });
+    return failure(call.key, error, false, outcome);
   }
 
   const assets = tool.assets(outcome.output);
-  ports.update(call.key, { name: tool.name, seq: call.seq, status: "completed", credits: outcome.creditsMicro.toString(), assetUrl: assets[0]?.url });
+  ports.update(call.key, { name: tool.name, seq: call.seq, status: "completed", credits: outcome.creditsMicro.toString(), durationMs: outcome.durationMs, assetUrl: assets[0]?.url });
   return {
     key: call.key,
     blocks: [
-      { type: "tool_result", toolCallId: call.key, status: "completed", output: outcome.output },
+      { type: "tool_result", toolCallId: call.key, status: "completed", output: outcome.output, ...costFields(outcome) },
       ...assets.map((a) => ({ type: "asset" as const, kind: a.kind, url: a.url, toolCallId: call.key })),
     ],
     llmContent: JSON.stringify(outcome.output),
+    creditsMicro: outcome.creditsMicro,
   };
 }
 

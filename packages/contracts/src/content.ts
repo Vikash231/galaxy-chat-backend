@@ -20,6 +20,8 @@ export const ContentBlock = z.discriminatedUnion("type", [
     status: z.enum(["completed", "failed", "cancelled"]),
     output: z.unknown().optional(),
     error: SafeError.optional(),
+    creditsMicro: z.number().int().nonnegative().optional(),
+    durationMs: z.number().int().nonnegative().optional(),
   }),
   z.object({ type: z.literal("asset"), kind: AssetKind, url: z.string().url(), toolCallId: z.string() }),
   z.object({
@@ -33,6 +35,14 @@ export const ContentBlock = z.discriminatedUnion("type", [
     height: z.number().int().nullable(),
   }),
   z.object({ type: z.literal("error"), error: SafeError }),
+  // What one assistant turn cost: billed tool credits plus token usage (LLM usage is billed at 0 credits).
+  z.object({
+    type: z.literal("usage"),
+    creditsMicro: z.number().int().nonnegative(),
+    promptTokens: z.number().int().nonnegative(),
+    completionTokens: z.number().int().nonnegative(),
+    models: z.array(z.string()),
+  }),
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 export const ContentBlocks = z.array(ContentBlock);

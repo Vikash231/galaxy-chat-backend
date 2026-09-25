@@ -20,7 +20,7 @@ import { toolRuns } from "../../queues";
 import { getMagica } from "../../services";
 
 /** What the parent turn receives; bigint travels as a string. */
-export type ToolOutcomeWire = { status: ToolOutcome["status"]; output?: unknown; creditsMicro: string; error?: SafeError };
+export type ToolOutcomeWire = { status: ToolOutcome["status"]; output?: unknown; creditsMicro: string; durationMs?: number; error?: SafeError };
 
 const PROVIDER = "magica";
 const POLL_SECONDS = 5;
@@ -119,6 +119,7 @@ function toWire(inv: InvocationRow): ToolOutcomeWire {
     status: inv.status as ToolOutcome["status"],
     output: inv.output ?? undefined,
     creditsMicro: inv.creditsMicro.toString(),
+    durationMs: inv.durationMs ?? undefined,
     error: readError(inv) ?? undefined,
   };
 }

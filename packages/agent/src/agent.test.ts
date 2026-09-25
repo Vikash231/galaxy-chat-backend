@@ -56,7 +56,9 @@ describe("agent loop", () => {
     const out = await runAgentTurn(p);
 
     expect(out.status).toBe("completed");
-    expect(out.blocks.map((b) => b.type)).toEqual(["tool_use", "tool_result", "asset", "text"]);
+    expect(out.blocks.map((b) => b.type)).toEqual(["tool_use", "tool_result", "asset", "text", "usage"]);
+    expect(out.blocks[1]).toMatchObject({ type: "tool_result", creditsMicro: 5000 });
+    expect(out.blocks.at(-1)).toEqual({ type: "usage", creditsMicro: 5000, promptTokens: 2, completionTokens: 2, models: ["m:free"] });
     expect(tools.settle).toHaveBeenCalledWith("inv_0", 5_000n);
     const second = seen[1]!;
     const assistant = second.at(-2) as Extract<LlmMessage, { role: "assistant" }>;
@@ -103,6 +105,19 @@ describe("agent loop", () => {
     expect(results).toEqual(["0:c0", "0:c1", "0:c2"]);
   });
 
+  it("totals credits across parallel tool calls in the usage block", async () => {
+    const calls = [0, 1].map((i) => ({ id: `c${i}`, name: "crop_image", argsJson: cropArgs(i) }));
+    const { llm } = fakeLlm([step({ toolCalls: calls }), step({ text: "done" })]);
+    const out = await runAgentTurn(ports(llm, fakeTools()));
+    expect(out.blocks.at(-1)).toMatchObject({ type: "usage", creditsMicro: 10_000 });
+  });
+
+  it("records zero credits for a plain answer", async () => {
+    const { llm } = fakeLlm([step({ text: "4" })]);
+    const out = await runAgentTurn(ports(llm, fakeTools()));
+    expect(out.blocks).toEqual([{ type: "text", text: "4" }, { type: "usage", creditsMicro: 0, promptTokens: 1, completionTokens: 1, models: ["m:free"] }]);
+  });
+
   it("does not charge failed provider runs", async () => {
     const { llm } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs() }] }), step({ text: "Sorry." })]);
     const tools = fakeTools({ outcome: () => ({ status: "failed", creditsMicro: 0n, error: { code: "provider_failed", message: "bad image", retryable: true } }) });
@@ -115,7 +130,8 @@ describe("agent loop", () => {
     const loop = () => step({ toolCalls: [{ id: "c", name: "crop_image", argsJson: cropArgs() }] });
     const { llm } = fakeLlm([loop(), loop(), loop()]);
     const out = await runAgentTurn(ports(llm, fakeTools(), { maxSteps: 2 }));
-    expect(out.blocks.at(-1)).toMatchObject({ type: "text", text: expect.stringContaining("step limit") });
+    expect(out.blocks.at(-2)).toMatchObject({ type: "text", text: expect.stringContaining("step limit") });
+    expect(out.blocks.at(-1)).toMatchObject({ type: "usage" });
   });
 });
 

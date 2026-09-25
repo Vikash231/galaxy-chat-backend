@@ -108,7 +108,7 @@ function toolPorts(run: { id: string; userId: string }, meta: MetaWriter): ToolP
     balance: () => getBalance(run.userId),
     upsert: async (i) => {
       const row = await upsertInvocation({ runId: run.id, ...i });
-      return { id: row.id, status: row.status, output: row.output, creditsMicro: row.creditsMicro, error: readError(row) };
+      return { id: row.id, status: row.status, output: row.output, creditsMicro: row.creditsMicro, durationMs: row.durationMs, error: readError(row) };
     },
     dispatch: async (_tool, toolInvocationId) => {
       const res = await magicaRun.triggerAndWait({ toolInvocationId }, { idempotencyKey: `magica-run:${toolInvocationId}` });
@@ -118,8 +118,8 @@ function toolPorts(run: { id: string; userId: string }, meta: MetaWriter): ToolP
     settle: async (toolInvocationId, creditsMicro) => {
       await settleToolCharge({ userId: run.userId, runId: run.id, toolInvocationId, creditsMicro });
     },
-    update: (key, { label, ...patch }) => {
-      meta.tool(key, patch);
+    update: (key, { label, durationMs, ...patch }) => {
+      meta.tool(key, { ...patch, ...(durationMs != null && { durationMs }) });
       if (label) meta.set({ label });
     },
   };
