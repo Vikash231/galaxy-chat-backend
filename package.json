@@ -1,0 +1,25 @@
+{
+  "name": "galaxy-chat-backend",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose -f docker/docker-compose.yml up -d postgres",
+    "db:migrate": "pnpm --filter @gx/db migrate:dev",
+    "db:generate": "pnpm --filter @gx/db generate",
+    "dev:api": "pnpm --filter @gx/api dev",
+    "dev:worker": "pnpm --filter @gx/worker dev",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "jose": "6.2.12",
+    "msw": "2.15.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["packages/*/src/**/*.ts", "apps/worker/src/**/*.ts", "apps/worker/trigger.config.ts", "apps/api/src/**/*.ts", "apps/api/next.config.ts"]
+}

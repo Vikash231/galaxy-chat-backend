@@ -1,0 +1,42 @@
+name: galaxy-chat
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: galaxy
+      POSTGRES_PASSWORD: galaxy
+      POSTGRES_DB: galaxy
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U galaxy"]
+      interval: 2s
+      retries: 30
+
+  migrator:
+    build: { context: .., dockerfile: apps/migrator/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy
+      DIRECT_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy
+    depends_on: { postgres: { condition: service_healthy } }
+    profiles: [full]
+
+  api:
+    build: { context: .., dockerfile: apps/api/Dockerfile }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy
+    ports: ["3000:3000"]
+    depends_on: { migrator: { condition: service_completed_successfully } }
+    profiles: [full]
+
+  worker:
+    build: { context: .., dockerfile: apps/worker/Dockerfile }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://galaxy:galaxy@postgres:5432/galaxy
+    depends_on: { migrator: { condition: service_completed_successfully } }
+    profiles: [full]
+
+volumes:
+  pgdata:
