@@ -1,0 +1,7 @@
+{
+  "name": "@gx/llm",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@gx/contracts": "workspace:*", "openai": "5.23.2" }
+}

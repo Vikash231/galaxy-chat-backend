@@ -1,0 +1,7 @@
+{
+  "name": "@gx/agent",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@gx/contracts": "workspace:*", "@gx/llm": "workspace:*", "@gx/tools": "workspace:*", "zod": "4.6.5" }
+}
