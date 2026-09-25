@@ -1,0 +1,930 @@
+[
+    {
+        "accent": "blue",
+        "category": "utility",
+        "description": "Extract text from documents and images on demand.",
+        "icon": "FileText",
+        "name": "Document OCR",
+        "nodeType": "document_ocr"
+    },
+    {
+        "accent": "orange",
+        "category": "utility",
+        "description": "Crop an image to specified dimensions",
+        "icon": "Crop",
+        "name": "Crop Image",
+        "nodeType": "crop_image"
+    },
+    {
+        "accent": "yellow",
+        "category": "utility",
+        "description": "Extract audio track from a video",
+        "icon": "Music",
+        "name": "Extract Audio",
+        "nodeType": "extract_audio"
+    },
+    {
+        "accent": "teal",
+        "category": "utility",
+        "description": "Combine audio track with video",
+        "icon": "Combine",
+        "name": "Merge Audio & Video",
+        "nodeType": "merge_audio_video"
+    },
+    {
+        "accent": "indigo",
+        "category": "utility",
+        "description": "Concatenate multiple videos into one",
+        "icon": "Layers",
+        "name": "Merge Videos",
+        "nodeType": "merge_videos"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 6 Astra (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 6 Astra",
+        "nodeType": "gpt_6_astra"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 6 Astra Pro (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 6 Astra Pro",
+        "nodeType": "gpt_6_astra_pro"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Fable 5.1 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Fable 5.1",
+        "nodeType": "claude_fable_5_1"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.7 Flash (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.7 Flash",
+        "nodeType": "gemini_3_7_flash"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.8 Flash (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.8 Flash",
+        "nodeType": "gemini_3_8_flash"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.5 (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.5",
+        "nodeType": "gpt_5_5"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.5 Pro (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.5 Pro",
+        "nodeType": "gpt_5_5_pro"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Luna (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Luna",
+        "nodeType": "gpt_5_6_luna"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Luna Pro (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Luna Pro",
+        "nodeType": "gpt_5_6_luna_pro"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Terra (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Terra",
+        "nodeType": "gpt_5_6_terra"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Terra Pro (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Terra Pro",
+        "nodeType": "gpt_5_6_terra_pro"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Sol (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Sol",
+        "nodeType": "gpt_5_6_sol"
+    },
+    {
+        "accent": "green",
+        "category": "llm",
+        "description": "Generate text using GPT 5.6 Sol Pro (OpenAI)",
+        "icon": "MessageSquare",
+        "name": "GPT 5.6 Sol Pro",
+        "nodeType": "gpt_5_6_sol_pro"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.1 Pro (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.1 Pro",
+        "nodeType": "gemini_3_1_pro_preview"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Sonnet 4.6 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Sonnet 4.6",
+        "nodeType": "claude_sonnet_4_6"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Sonnet 5 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Sonnet 5",
+        "nodeType": "claude_sonnet_5"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Opus 4.7 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Opus 4.7",
+        "nodeType": "claude_opus_4_7"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Opus 4.8 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Opus 4.8",
+        "nodeType": "claude_opus_4_8"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Opus 5 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Opus 5",
+        "nodeType": "claude_opus_5"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Opus 5.5 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Opus 5.5",
+        "nodeType": "claude_opus_5_5"
+    },
+    {
+        "accent": "orange",
+        "category": "llm",
+        "description": "Generate text using Claude Fable 5 (Anthropic)",
+        "icon": "MessageSquare",
+        "name": "Claude Fable 5",
+        "nodeType": "claude_fable_5"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.1 Flash Lite (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.1 Flash Lite",
+        "nodeType": "gemini_3_1_flash_lite"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.5 Flash (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.5 Flash",
+        "nodeType": "gemini_3_5_flash"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.6 Flash (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.6 Flash",
+        "nodeType": "gemini_3_6_flash"
+    },
+    {
+        "accent": "blue",
+        "category": "llm",
+        "description": "Generate text using Gemini 3.5 Flash Lite (Google)",
+        "icon": "MessageSquare",
+        "name": "Gemini 3.5 Flash Lite",
+        "nodeType": "gemini_3_5_flash_lite"
+    },
+    {
+        "accent": "purple",
+        "category": "llm",
+        "description": "Generate text using Kimi K3 (MoonshotAI)",
+        "icon": "MessageSquare",
+        "name": "Kimi K3",
+        "nodeType": "kimi_k3"
+    },
+    {
+        "accent": "cyan",
+        "category": "llm",
+        "description": "Generate text using DeepSeek V3.2 (DeepSeek)",
+        "icon": "MessageSquare",
+        "name": "DeepSeek V3.2",
+        "nodeType": "deepseek_v3_2"
+    },
+    {
+        "accent": "red",
+        "category": "llm",
+        "description": "Generate text using Grok 4.5 (xAI)",
+        "icon": "MessageSquare",
+        "name": "Grok 4.5",
+        "nodeType": "grok_4_5"
+    },
+    {
+        "accent": "red",
+        "category": "llm",
+        "description": "Generate text using Grok 4.6 (xAI)",
+        "icon": "MessageSquare",
+        "name": "Grok 4.6",
+        "nodeType": "grok_4_6"
+    },
+    {
+        "accent": "red",
+        "category": "llm",
+        "description": "Generate text using Grok 4.3 (xAI)",
+        "icon": "MessageSquare",
+        "name": "Grok 4.3",
+        "nodeType": "grok_4_3"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "Latest ElevenLabs model with best quality and emotion",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs V3",
+        "nodeType": "elevenlabs_v3_tts"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "Multilingual TTS supporting 29 languages with natural speech",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs Multilingual V2",
+        "nodeType": "elevenlabs_multilingual_v2_tts"
+    },
+    {
+        "accent": "cyan",
+        "category": "audio-isolation",
+        "description": "Isolate vocals from background noise and music in any audio or video file",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs Audio Isolation",
+        "nodeType": "elevenlabs_isolation"
+    },
+    {
+        "accent": "cyan",
+        "category": "sound-effects",
+        "description": "Generate realistic sound effects from text descriptions",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs Sound Effects",
+        "nodeType": "elevenlabs_sfx"
+    },
+    {
+        "accent": "cyan",
+        "category": "music-generation",
+        "description": "Studio-grade AI music generation with natural language prompts",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "Eleven Music",
+        "nodeType": "elevenlabs_music"
+    },
+    {
+        "accent": "cyan",
+        "category": "voice-changing",
+        "description": "Transform any voice into a different voice while preserving emotion and intonation",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs Voice Changer",
+        "nodeType": "elevenlabs_sts"
+    },
+    {
+        "accent": "cyan",
+        "category": "sound-effects",
+        "description": "Generate realistic sound effects from text descriptions using CassetteAI",
+        "icon": "https://audio.galaxy.ai/model-logos/cassette.png",
+        "name": "CassetteAI Sound Effects",
+        "nodeType": "cassette_ai_sfx"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "High-quality text-to-speech powered by GPT-4o Mini with expressive voice control",
+        "icon": "https://audio.galaxy.ai/model-logos/openai.webp",
+        "name": "OpenAI TTS",
+        "nodeType": "openai_tts"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "High-definition text-to-speech powered by MiniMax Speech 2.8 HD with custom voice support",
+        "icon": "https://audio.galaxy.ai/model-logos/minimax.png",
+        "name": "MiniMax TTS",
+        "nodeType": "minimax_tts"
+    },
+    {
+        "accent": "cyan",
+        "category": "voice-cloning",
+        "description": "Clone a reusable voice from 10 seconds to 5 minutes of clear MP3, M4A, or WAV audio.",
+        "icon": "https://audio.galaxy.ai/model-logos/minimax.png",
+        "name": "Minimax Voice Clone",
+        "nodeType": "minimax_voice_clone"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "Highest quality Gemini model for text-to-speech",
+        "icon": "https://audio.galaxy.ai/model-logos/gemini.png",
+        "name": "Gemini Pro TTS",
+        "nodeType": "gemini_pro_tts"
+    },
+    {
+        "accent": "cyan",
+        "category": "transcription",
+        "description": "Transcribe audio and video files with high accuracy.",
+        "icon": "FileText",
+        "name": "AI Transcription",
+        "nodeType": "ai_transcription"
+    },
+    {
+        "accent": "cyan",
+        "category": "audio-translation",
+        "description": "Translate audio into different languages while preserving the original voice",
+        "icon": "https://audio.galaxy.ai/model-logos/elevenlabs.svg",
+        "name": "ElevenLabs Dubbing V2",
+        "nodeType": "elevenlabs_dubbing"
+    },
+    {
+        "accent": "cyan",
+        "category": "stem-splitting",
+        "description": "Separate audio into individual stems (vocals, drums, bass, guitar, piano) using Meta's Demucs model",
+        "icon": "Layers",
+        "name": "Stem Splitter",
+        "nodeType": "fal_demucs"
+    },
+    {
+        "accent": "cyan",
+        "category": "audio-separation",
+        "description": "Isolate any sound from an audio file using a natural-language description (e.g. 'piano playing', 'dog barking').",
+        "icon": "Wand2",
+        "name": "Audio Separate",
+        "nodeType": "audio_separate"
+    },
+    {
+        "accent": "cyan",
+        "category": "audio-separation",
+        "description": "Isolate sounds in a video using a natural-language description (e.g. 'man on the left'). Optionally provide a binary mask video.",
+        "icon": "Video",
+        "name": "Audio Visual Separate",
+        "nodeType": "audio_visual_separate"
+    },
+    {
+        "accent": "cyan",
+        "category": "podcast-summarization",
+        "description": "Transcribe any podcast episode into accurate, readable text.",
+        "icon": "FileText",
+        "name": "Podcast Transcription",
+        "nodeType": "podcast_summarizer"
+    },
+    {
+        "accent": "cyan",
+        "category": "text-to-speech",
+        "description": "Generate natural-sounding speech and audio from text, with optional reference audio or image guidance.",
+        "icon": "https://audio.galaxy.ai/model-logos/bytedance.png",
+        "name": "Seed Audio 1.0",
+        "nodeType": "seed_audio_1_0"
+    },
+    {
+        "accent": "cyan",
+        "category": "music-generation",
+        "description": "Google Lyria 3.5 music generation from text and images",
+        "icon": "https://audio.galaxy.ai/model-logos/google.png",
+        "name": "Lyria 3.5",
+        "nodeType": "lyria_3_5"
+    },
+    {
+        "accent": "purple",
+        "category": "text-to-image",
+        "description": "State-of-the-art image generation with exceptional realism, precision, and consistency",
+        "icon": "https://image.galaxy.ai/image-logos/flux.png",
+        "name": "FLUX 2 Max",
+        "nodeType": "flux_2_max",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "flux-2-max-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "flux-2-max-edit"
+            }
+        ]
+    },
+    {
+        "accent": "purple",
+        "category": "text-to-image",
+        "description": "Google's Gemini 3.1 Flash Image model with web search grounding",
+        "icon": "https://image.galaxy.ai/image-logos/google.png",
+        "name": "Nano Banana 2",
+        "nodeType": "nano_banana_2",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "nano-banana-2-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "nano-banana-2-edit"
+            }
+        ]
+    },
+    {
+        "accent": "green",
+        "category": "text-to-image",
+        "description": "Google's Gemini 3 Pro Image model with web search grounding",
+        "icon": "https://image.galaxy.ai/image-logos/google.png",
+        "name": "Nano Banana Pro",
+        "nodeType": "nano_banana_pro",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "nano-banana-pro-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "nano-banana-pro-edit"
+            }
+        ]
+    },
+    {
+        "accent": "cyan",
+        "category": "image-to-image",
+        "description": "AI-powered image upscaling with face enhancement support",
+        "icon": "https://cdn.prod.website-files.com/6005fac27a49a9cd477afb63/68b0647c1b2bf2aaedf1890e_icon-studio.svg",
+        "name": "Topaz Upscale",
+        "nodeType": "topaz_upscale"
+    },
+    {
+        "accent": "purple",
+        "category": "text-to-image",
+        "description": "Grok Imagine Image 2.0 with highly aesthetic image generation",
+        "icon": "https://image.galaxy.ai/image-logos/grok.webp",
+        "name": "Grok Imagine Image 2.0",
+        "nodeType": "grok_imagine_image",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "grok-imagine-image-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "grok-imagine-image-edit"
+            }
+        ]
+    },
+    {
+        "accent": "green",
+        "category": "text-to-image",
+        "description": "OpenAI's newest image model with any-resolution support and improved quality",
+        "icon": "https://image.galaxy.ai/image-logos/gpt-image-1.webp",
+        "name": "GPT Image 2",
+        "nodeType": "gpt_image_2",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "gpt-image-2-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "gpt-image-2-edit"
+            }
+        ]
+    },
+    {
+        "accent": "green",
+        "category": "text-to-image",
+        "description": "Fast, high-quality image generation and editing.",
+        "icon": "https://image.galaxy.ai/image-logos/gpt-image-1.webp",
+        "name": "GPT Image 2.5 Flare",
+        "nodeType": "gpt_image_2_5_flare",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "gpt-image-2.5-flare-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "gpt-image-2.5-flare-edit"
+            }
+        ]
+    },
+    {
+        "accent": "green",
+        "category": "text-to-image",
+        "description": "Precise image generation and editing with detailed instruction following.",
+        "icon": "https://image.galaxy.ai/image-logos/gpt-image-1.webp",
+        "name": "GPT Image 2.5 Sunburst",
+        "nodeType": "gpt_image_2_5_sunburst",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "gpt-image-2.5-sunburst-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "gpt-image-2.5-sunburst-edit"
+            }
+        ]
+    },
+    {
+        "accent": "purple",
+        "category": "text-to-image",
+        "description": "Meshy V6 Preview text-to-3D — latest preview model from Meshy",
+        "icon": "https://avatars.githubusercontent.com/u/160386200?s=200&v=4",
+        "name": "Meshy V6 Preview",
+        "nodeType": "meshy_v6_preview",
+        "subModels": [
+            {
+                "category": "text-to-image",
+                "label": "Text to Image",
+                "subModelId": "meshy-v6-preview-text"
+            },
+            {
+                "category": "image-to-image",
+                "label": "Image to Image",
+                "subModelId": "meshy-v6-preview-edit"
+            }
+        ]
+    },
+    {
+        "accent": "purple",
+        "category": "image-to-image",
+        "description": "AI-powered background removal for any image using 851 Labs",
+        "icon": "",
+        "name": "Image Background Remover",
+        "nodeType": "background_remover"
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Create short 720p videos from text prompts with fast generation.",
+        "icon": "https://video.galaxy.ai/google.png",
+        "name": "Gemini Omni Flash",
+        "nodeType": "gemini_omni_flash",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "gemini-omni-flash-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "gemini-omni-flash-image-to-video"
+            },
+            {
+                "category": "reference-to-video",
+                "label": "Reference to Video",
+                "subModelId": "gemini-omni-flash-reference-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "video-to-video",
+        "description": "Edit an uploaded 720p video with natural language.",
+        "icon": "https://video.galaxy.ai/google.png",
+        "name": "Gemini Omni Flash Edit Video",
+        "nodeType": "gemini_omni_flash_edit_video"
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Hollywood-grade cinematic videos with native audio-visual synchronization, director-level camera and lighting control.",
+        "icon": "https://video.galaxy.ai/bytedance.webp",
+        "name": "Seedance 2.0",
+        "nodeType": "seedance_2_0",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "seedance-2.0-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "seedance-2.0-image-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Fast cinematic video generation with native audio-visual synchronization at lower cost.",
+        "icon": "https://video.galaxy.ai/bytedance.webp",
+        "name": "Seedance 2.0 Fast",
+        "nodeType": "seedance_2_0_fast",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "seedance-2.0-fast-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "seedance-2.0-fast-image-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "reference-to-video",
+        "description": "Generate cinematic videos from reference images with consistent subject appearance using Seedance 2.0.",
+        "icon": "https://video.galaxy.ai/bytedance.webp",
+        "name": "Seedance 2.0 Reference",
+        "nodeType": "seedance_2_0_reference"
+    },
+    {
+        "accent": "blue",
+        "category": "reference-to-video",
+        "description": "Fast reference-based video generation with consistent subject appearance at lower cost.",
+        "icon": "https://video.galaxy.ai/bytedance.webp",
+        "name": "Seedance 2.0 Fast Reference",
+        "nodeType": "seedance_2_0_fast_reference"
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Create native-audio videos up to 30 seconds long from a text prompt.",
+        "icon": "https://video.galaxy.ai/bytedance.webp",
+        "name": "Seedance 2.5",
+        "nodeType": "seedance_2_5",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "seedance-2.5-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "seedance-2.5-image-to-video"
+            },
+            {
+                "category": "reference-to-video",
+                "label": "Reference to Video",
+                "subModelId": "seedance-2.5-reference-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Create detailed videos from text, start and end frames, or image, video and audio references.",
+        "icon": "https://audio.galaxy.ai/model-logos/minimax.png",
+        "name": "MiniMax H3 Max",
+        "nodeType": "minimax_h3_max",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "minimax-h3-max-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "minimax-h3-max-image-to-video"
+            },
+            {
+                "category": "reference-to-video",
+                "label": "Reference to Video",
+                "subModelId": "minimax-h3-max-reference-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "bg-remover",
+        "description": "Remove video background with green screen output.",
+        "icon": "",
+        "name": "Video BG Remover (Green Screen)",
+        "nodeType": "video_bg_remover_green_screen"
+    },
+    {
+        "accent": "blue",
+        "category": "bg-remover",
+        "description": "Remove video background with transparent output.",
+        "icon": "",
+        "name": "Video BG Remover (Transparent)",
+        "nodeType": "video_bg_remover_transparent"
+    },
+    {
+        "accent": "blue",
+        "category": "bg-remover",
+        "description": "Fast video background removal (transparent WebM output).",
+        "icon": "https://video.galaxy.ai/veed.webp",
+        "name": "VEED Fast Video BG Remover",
+        "nodeType": "veed_video_fast_bg_remover"
+    },
+    {
+        "accent": "blue",
+        "category": "bg-remover",
+        "description": "Standard video background removal (transparent WebM output).",
+        "icon": "https://video.galaxy.ai/veed.webp",
+        "name": "VEED Video BG Remover",
+        "nodeType": "veed_video_regular_bg_remover"
+    },
+    {
+        "accent": "blue",
+        "category": "bg-changer",
+        "description": "Replace video background with a custom image.",
+        "icon": "",
+        "name": "Video Background Changer",
+        "nodeType": "video_bg_changer"
+    },
+    {
+        "accent": "blue",
+        "category": "faceswap",
+        "description": "AI-powered video face swap.",
+        "icon": "",
+        "name": "Video Faceswap",
+        "nodeType": "video_faceswap"
+    },
+    {
+        "accent": "blue",
+        "category": "watermark-remover",
+        "description": "Remove watermarks from videos.",
+        "icon": "",
+        "name": "Video Watermark Remover",
+        "nodeType": "video_watermark_remover"
+    },
+    {
+        "accent": "blue",
+        "category": "upscaler",
+        "description": "Resolution-based video upscaling up to 4K.",
+        "icon": "",
+        "name": "Video Upscaler",
+        "nodeType": "video_upscaler"
+    },
+    {
+        "accent": "blue",
+        "category": "social-media-video-downloader",
+        "description": "Download videos from TikTok, Instagram, Twitter/X, and LinkedIn.",
+        "icon": "",
+        "name": "Social Media Video Downloader",
+        "nodeType": "social_media_video_downloader"
+    },
+    {
+        "accent": "blue",
+        "category": "video-clips",
+        "description": "AI-powered video clipping tool that automatically generates viral-worthy short clips from long-form videos. Supports 35 languages.",
+        "icon": "",
+        "name": "Video Clips Generator",
+        "nodeType": "video_clips_generator"
+    },
+    {
+        "accent": "blue",
+        "category": "lipsync",
+        "description": "High-quality lip-sync with automatic fallback.",
+        "icon": "https://video.galaxy.ai/veed.webp",
+        "name": "VEED Fabric Lipsync",
+        "nodeType": "veed_talking_photo"
+    },
+    {
+        "accent": "blue",
+        "category": "video-to-video",
+        "description": "Auto-transcribe a video and render styled, burned-in subtitles. Optional subtitle translation, 28 presets, SRT input, and per-word styling.",
+        "icon": "https://video.galaxy.ai/veed.webp",
+        "name": "VEED Subtitles",
+        "nodeType": "veed_subtitles"
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "xAI Grok Imagine Video 1.5 text-to-video model. Generates videos from text prompts with flexible duration and resolution options.",
+        "icon": "https://video.galaxy.ai/xai.webp",
+        "name": "Grok Imagine Video 1.5",
+        "nodeType": "grok_imagine_video",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "xai-grok-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "xai-grok-image-to-video"
+            },
+            {
+                "category": "reference-to-video",
+                "label": "Reference to Video",
+                "subModelId": "xai-grok-video-edit"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "text-to-video",
+        "description": "Premium Kling v3 Pro model with top-tier video quality and advanced prompt adherence.",
+        "icon": "https://video.galaxy.ai/kling.webp",
+        "name": "Kling v3 Pro",
+        "nodeType": "kling_v3_pro",
+        "subModels": [
+            {
+                "category": "text-to-video",
+                "label": "Text to Video",
+                "subModelId": "kling-v3-pro-text-to-video"
+            },
+            {
+                "category": "image-to-video",
+                "label": "Image to Video",
+                "subModelId": "kling-v3-pro-image-to-video"
+            }
+        ]
+    },
+    {
+        "accent": "blue",
+        "category": "video-to-video",
+        "description": "Transfer movements from a reference video to any character image with high quality output.",
+        "icon": "https://video.galaxy.ai/kling.webp",
+        "name": "Kling V3 Pro Motion Control",
+        "nodeType": "kling_v3_pro_motion_control"
+    },
+    {
+        "accent": "blue",
+        "category": "video-to-video",
+        "description": "Edit existing videos with natural language using Kling O3 Pro. Supports reference images and elements for consistent character identity, object details, and environment styling.",
+        "icon": "https://video.galaxy.ai/kling.webp",
+        "name": "Kling O3 Pro Video Edit",
+        "nodeType": "kling_o3_pro_video_edit"
+    },
+    {
+        "accent": "blue",
+        "category": "lipsync",
+        "description": "Video-to-video lip-sync with extended duration support.",
+        "icon": "",
+        "name": "Infinitalk Video",
+        "nodeType": "infinitalk_video_lipsync"
+    },
+    {
+        "accent": "blue",
+        "category": "lipsync",
+        "description": "High-quality AI-powered lip sync with custom photos.",
+        "icon": "https://video.galaxy.ai/hedra.webp",
+        "name": "Hedra Lipsync",
+        "nodeType": "hedra_lipsync"
+    },
+    {
+        "accent": "blue",
+        "category": "lipsync",
+        "description": "Extended duration lip-sync up to 10 minutes.",
+        "icon": "",
+        "name": "Infinitalk",
+        "nodeType": "infinitalk_lipsync"
+    }
+]

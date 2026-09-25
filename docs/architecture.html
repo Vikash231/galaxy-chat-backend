@@ -1,0 +1,904 @@
+<title>Agent Chat Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --bg:#f3f6f5; --surface:#ffffff; --sunk:#e9eeed; --ink:#15212a; --muted:#566570; --line:#d5dfe0;
+  --accent:#17616b; --accent-soft:#dcecee; --ok:#2e7a4d; --warn:#9a5a12; --bad:#a8322a;
+  --ok-soft:#e1f1e7; --warn-soft:#f6ead9; --bad-soft:#f6e0de;
+  --code:#0f3d44;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0e1417; --surface:#141c20; --sunk:#1a2429; --ink:#e2eaec; --muted:#93a4ac; --line:#26343a;
+    --accent:#6cc0c8; --accent-soft:#16363a; --ok:#7fcf9c; --warn:#e2a95a; --bad:#f08a80;
+    --ok-soft:#173226; --warn-soft:#3a2a14; --bad-soft:#3a1c19; --code:#a6dde2;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0e1417; --surface:#141c20; --sunk:#1a2429; --ink:#e2eaec; --muted:#93a4ac; --line:#26343a;
+  --accent:#6cc0c8; --accent-soft:#16363a; --ok:#7fcf9c; --warn:#e2a95a; --bad:#f08a80;
+  --ok-soft:#173226; --warn-soft:#3a2a14; --bad-soft:#3a1c19; --code:#a6dde2;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px}
+.shell{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:32px;padding-block:32px 80px}
+@media (min-width:1100px){.shell{grid-template-columns:230px minmax(0,1fr)}}
+nav.toc{display:none}
+@media (min-width:1100px){
+  nav.toc{display:block;position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;font-size:13px}
+}
+nav.toc .h{font:600 11px/1 var(--cond);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav.toc a:hover{color:var(--ink);border-left-color:var(--accent)}
+nav.toc .sub a{padding-left:22px;font-size:12.5px}
+main{min-width:0}
+header.top{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:8px}
+.eyebrow{font:600 11px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{font:600 clamp(28px,4vw,40px)/1.1 var(--cond);margin:10px 0 12px;text-wrap:balance}
+h2{font:600 26px/1.2 var(--cond);margin:56px 0 6px;text-wrap:balance;scroll-margin-top:24px}
+h2 .n{color:var(--accent);margin-right:10px;font-variant-numeric:tabular-nums}
+h3{font:600 18px/1.3 var(--cond);margin:36px 0 8px;scroll-margin-top:24px}
+h4{font:600 13px/1.3 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+p{max-width:75ch;margin:0 0 12px}
+.lede{font-size:16.5px;color:var(--muted);max-width:80ch}
+.section-intro{color:var(--muted);max-width:80ch}
+code,.mono{font-family:var(--mono);font-size:.88em}
+p code,li code,td code{color:var(--code);background:var(--sunk);padding:1px 5px;border-radius:4px;white-space:nowrap}
+td code{white-space:normal;word-break:break-word}
+a{color:var(--accent)}
+ul,ol{max-width:80ch;padding-left:20px;margin:0 0 12px}
+li{margin:3px 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.pill{display:inline-block;font:500 11.5px/1.5 var(--mono);padding:1px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);white-space:nowrap}
+.pill.get{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+.pill.post{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+.pill.int{color:var(--accent);background:var(--accent-soft);border-color:transparent}
+.pill.auth{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+.table-wrap{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font:600 11.5px/1.3 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+pre.code{font:12.5px/1.55 var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 18px;color:var(--ink)}
+pre.code .c{color:var(--muted)}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;margin:12px 0 8px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:transparent;text-align:center}
+.cap{font-size:12.5px;color:var(--muted);margin:6px 0 18px}
+.callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);border-radius:6px;padding:12px 16px;margin:14px 0;max-width:90ch}
+.callout.warn{border-left-color:var(--warn)}
+.callout.bad{border-left-color:var(--bad)}
+.callout b{font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:860px){.grid2{grid-template-columns:1fr 1fr}}
+.api{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+.api-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:6px}
+.api-head .path{font:500 15px/1.3 var(--mono);color:var(--ink);word-break:break-all}
+.api .purpose{color:var(--muted);margin-bottom:10px}
+.kv{display:grid;grid-template-columns:1fr;gap:4px 16px;font-size:13.5px;margin:10px 0}
+@media (min-width:700px){.kv{grid-template-columns:160px minmax(0,1fr)}}
+.kv dt{font:600 11.5px/1.8 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv dd{margin:0 0 6px}
+.api pre.code{margin:6px 0 12px;background:var(--bg)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0 18px;max-width:none}
+.steps>li{counter-increment:s;position:relative;padding:10px 14px 10px 52px;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:8px 0}
+.steps>li::before{content:counter(s,decimal-leading-zero);position:absolute;left:14px;top:10px;font:500 13px/1.6 var(--mono);color:var(--accent)}
+.steps .who{font:600 11px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:6px}
+.steps .fail{display:block;margin-top:4px;font-size:13px;color:var(--bad)}
+.tree{font:12.5px/1.6 var(--mono);white-space:pre;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 18px}
+.tree .d{color:var(--accent);font-weight:500}
+.tree .c{color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
+hr{border:0;border-top:1px solid var(--line);margin:40px 0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="shell">
+<nav class="toc" aria-label="Contents">
+  <div class="h">Contents</div>
+  <ol>
+    <li><a href="#services">1 · Services &amp; layout</a></li>
+    <li class="sub"><a href="#deployables">Deployables</a></li>
+    <li class="sub"><a href="#packages">Shared packages</a></li>
+    <li class="sub"><a href="#tree">Folder tree</a></li>
+    <li class="sub"><a href="#secrets">Secrets per service</a></li>
+    <li class="sub"><a href="#scale">Scalability</a></li>
+    <li><a href="#flows">2 · Flow diagrams</a></li>
+    <li class="sub"><a href="#f-arch">System architecture</a></li>
+    <li class="sub"><a href="#f-auth">Authentication</a></li>
+    <li class="sub"><a href="#f-send">Send a turn</a></li>
+    <li class="sub"><a href="#f-loop">Agent loop</a></li>
+    <li class="sub"><a href="#f-magica">Magica tool run</a></li>
+    <li class="sub"><a href="#f-rt">Realtime &amp; reload</a></li>
+    <li class="sub"><a href="#f-state">State machines</a></li>
+    <li class="sub"><a href="#f-er">Data model</a></li>
+    <li><a href="#apis">3 · API reference</a></li>
+    <li class="sub"><a href="#api-conv">Conventions</a></li>
+    <li class="sub"><a href="#api-list">Endpoint list</a></li>
+    <li class="sub"><a href="#api-detail">Endpoint details</a></li>
+    <li class="sub"><a href="#api-internal">Internal contracts</a></li>
+    <li><a href="#life">4 · Lifecycles</a></li>
+    <li class="sub"><a href="#l-req">Every request</a></li>
+    <li class="sub"><a href="#l-send">Send turn</a></li>
+    <li class="sub"><a href="#l-turn">agent-turn</a></li>
+    <li class="sub"><a href="#l-magica">magica-run</a></li>
+    <li class="sub"><a href="#l-recover">Reload &amp; token refresh</a></li>
+    <li class="sub"><a href="#l-cancel">Cancel</a></li>
+    <li class="sub"><a href="#l-races">Race conditions</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">Galaxy work trial · Backend design · Day 1 scope</div>
+  <h1>Agent Chat Blueprint</h1>
+  <p class="lede">How the backend is split into services, how a chat turn flows from the browser through the API, the Trigger.dev workers, OpenRouter and Magica, and back. It also covers how authentication works at every boundary. Day 1 goal: one signed-in user sends a message, the agent streams a reply, runs <b>Crop Image</b> on the real Magica API, and the result survives a reload.</p>
+  <div class="meta">
+    <span><b>Repos</b> galaxy-chat-backend (monorepo) · galaxy-chat-frontend</span>
+    <span><b>Deploy</b> api → Vercel · worker → Trigger.dev cloud</span>
+    <span><b>Source of truth</b> Postgres</span>
+    <span><b>Realtime</b> Trigger.dev streams + run metadata</span>
+  </div>
+</header>
+
+<!-- ============================ 1 ============================ -->
+<h2 id="services"><span class="n">1</span>Services and responsibilities</h2>
+<p class="section-intro">The backend is one pnpm-workspace repo. <b>Each deployable service is a folder under <code>apps/</code> with its own Dockerfile.</b> Shared logic lives in <code>packages/</code> and is never deployed on its own. Services talk to each other only through Postgres and Trigger.dev, never by importing each other.</p>
+
+<h3 id="deployables">1.1 Deployable services</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Service</th><th>Folder</th><th>Runtime / deploy target</th><th>Responsible for</th><th>Not responsible for</th><th>Scales by</th></tr></thead>
+<tbody>
+<tr><td><b>web</b></td><td><code>galaxy-chat-frontend/</code> (separate repo)</td><td>Next.js App Router → Vercel</td><td>Clerk sign-in UI, chat shell, composer, rendering persisted messages, subscribing to realtime runs, optimistic UI</td><td>Business rules, limits, credit math, tool schemas (it gets these from the generated API types)</td><td>CDN + Vercel edge</td></tr>
+<tr><td><b>api</b></td><td><code>apps/api</code></td><td>Next.js route handlers → Vercel (Dockerfile: <code>next build</code> standalone, for local/self-host)</td><td>Verify the Clerk JWT, check ownership, validate input, rate limit, check credits before a send, CRUD for chats and messages, <b>admit and dispatch a turn</b> (one transaction plus one trigger), run status, cancel, realtime token minting, OpenAPI spec</td><td>Calling the LLM or Magica. It holds <b>no</b> OpenRouter or Magica keys. Long work never happens inside a request.</td><td>Stateless, so it scales horizontally without limit; the bottleneck is DB connections through the pooler</td></tr>
+<tr><td><b>worker</b></td><td><code>apps/worker</code></td><td>Trigger.dev tasks → Trigger.dev cloud (<code>trigger deploy</code> builds its own image; Dockerfile for a self-hosted worker)</td><td><b>Queue <code>agent-turns</code></b>: task <code>agent-turn</code> runs the agent loop, streams LLM tokens, dispatches tools, saves a checkpoint after each step, settles credits, finalizes the turn.<br><b>Queue <code>tool-runs</code></b>: task <code>magica-run</code> calls Magica, waits on a token without using compute, reconciles the result, saves output.</td><td>Authenticating end users. It only receives IDs from the api and reloads all state from the DB.</td><td>Queue concurrency limits; waiting runs are checkpointed and use no compute</td></tr>
+<tr><td><b>migrator</b></td><td><code>apps/migrator</code></td><td>One-shot container / CI step</td><td><code>prisma migrate deploy</code> over the <b>direct</b> (non-pooled) connection, before api and worker deploy</td><td>Anything at runtime</td><td>Runs once per release</td></tr>
+</tbody></table></div>
+
+<div class="callout warn"><b>Why agent and tool tasks share one worker.</b> Trigger.dev's <code>triggerAndWait</code> only works between tasks in the same project, so <code>agent-turn</code> and <code>magica-run</code> must deploy together. They stay separate in the ways that matter for debugging: different folders (<code>src/tasks/agent</code> and <code>src/tasks/tools</code>), different queues with their own concurrency limits, and their own run pages in the Trigger.dev dashboard.</div>
+
+<h4>Managed dependencies</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>Dependency</th><th>Used by</th><th>Purpose</th><th>Plan / limit to watch</th></tr></thead>
+<tbody>
+<tr><td>Clerk</td><td>web, api</td><td>Identity, session JWT (RS256, ~60 s lifetime)</td><td>Free tier MAU limit</td></tr>
+<tr><td>Postgres (Neon)</td><td>api, worker, migrator</td><td>All durable state. Pooled URL for runtime, direct URL for migrations</td><td>Pooler connection cap (estimated: hundreds on the free tier, needs checking)</td></tr>
+<tr><td>Trigger.dev cloud</td><td>api, worker, web</td><td>Durable queues, retries, checkpoints, wait tokens, realtime streams + metadata</td><td><b>The free plan's concurrency limit is far below 1,000 concurrent runs.</b> Design for it; the plan limit is a deployment setting</td></tr>
+<tr><td>OpenRouter <code>openrouter/free</code></td><td>worker</td><td>LLM with tool calling. A random free model is chosen per request</td><td>Free-model rate limits (429s). This is the real throughput ceiling</td></tr>
+<tr><td>Magica</td><td>worker</td><td><code>crop_image</code> (Day 1), <code>gpt_image_2</code>, <code>merge_videos</code></td><td>29.95M microcredits measured. Crop costs 5,000 per run</td></tr>
+</tbody></table></div>
+
+<h3 id="packages">1.2 Shared packages</h3>
+<p>Dependency rule: <code>apps/*</code> → <code>packages/*</code>, never the reverse. Packages form a DAG (below), and an ESLint boundaries rule enforces it. <code>packages/agent</code> does not import the Trigger.dev SDK; the worker injects Trigger.dev into it, so the loop can be unit-tested without any infrastructure.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Package</th><th>Owns</th><th>Depends on</th><th>Used by</th></tr></thead>
+<tbody>
+<tr><td><code>@gx/config</code></td><td>Zod-parsed env per service (<code>apiEnv</code>, <code>workerEnv</code>). The process fails at boot if a variable is missing or wrong, e.g. a model other than <code>openrouter/free</code></td><td>zod</td><td>all apps</td></tr>
+<tr><td><code>@gx/contracts</code></td><td>Every trust-boundary schema: API request/response, <code>ContentBlock</code>, <code>RunMeta</code>, <code>StreamPart</code>, <code>SafeError</code>, error codes, OpenAPI registry</td><td>zod, zod-to-openapi</td><td>api, worker, (web via generated types)</td></tr>
+<tr><td><code>@gx/db</code></td><td>Prisma schema, migrations, client singleton, <b>repositories</b> (<code>chats.getOwned(userId, id)</code>, <code>runs.admit(...)</code>, <code>ledger.settle(...)</code>). Only this package touches Prisma directly</td><td>prisma, contracts</td><td>api, worker, migrator</td></tr>
+<tr><td><code>@gx/auth</code></td><td>Clerk JWT verification (networkless, via <code>CLERK_JWT_KEY</code>), <code>authorizedParties</code> check, lazy user provisioning, principal type</td><td>@clerk/backend, db</td><td>api</td></tr>
+<tr><td><code>@gx/observability</code></td><td>pino logger, redaction list, context binding (<code>traceId, userId, chatId, runId, messageId, toolInvocationId, magicaRunId, waitpointTokenId</code>)</td><td>pino</td><td>api, worker</td></tr>
+<tr><td><code>@gx/llm</code></td><td><code>LlmProvider</code> interface and the OpenRouter adapter (OpenAI-compatible client, SSE parsing, tool-call assembly, 429/empty-stream handling)</td><td>openai, contracts</td><td>worker</td></tr>
+<tr><td><code>@gx/magica</code></td><td><code>MagicaClient</code> (<code>run</code>, <code>getRun</code>), error mapping, fixture mode, daily spend cap</td><td>contracts</td><td>worker</td></tr>
+<tr><td><code>@gx/tools</code></td><td>Tool registry and <code>ToolDef</code>s (Day 1: <code>crop_image</code>). Each tool defines its input/output schema, cost estimate, Magica mapping and asset extractor</td><td>contracts, magica (types only)</td><td>worker, api (for OpenAPI + estimates)</td></tr>
+<tr><td><code>@gx/agent</code></td><td>Provider-neutral turn loop, history → LLM message mapping, tool executor (validate, credit gate, dedupe, order)</td><td>contracts, llm (interface), tools</td><td>worker</td></tr>
+</tbody></table></div>
+
+<h3 id="tree">1.3 Folder tree (backend repo)</h3>
+<div class="tree"><span class="d">galaxy-chat-backend/</span>
+├── <span class="d">apps/</span>
+│   ├── <span class="d">api/</span>                              <span class="c"># service: api (Vercel)</span>
+│   │   ├── Dockerfile
+│   │   ├── next.config.ts                 <span class="c"># output: "standalone" + Prisma engine tracing</span>
+│   │   └── src/
+│   │       ├── middleware.ts              <span class="c"># CORS + request id (Node runtime; must sit next to app/)</span>
+│   │       ├── openapi.ts                 <span class="c"># OpenAPI 3.1 generated from @gx/contracts</span>
+│   │       ├── app/api/
+│   │       │   ├── health/route.ts
+│   │       │   ├── openapi.json/route.ts
+│   │       │   └── v1/
+│   │       │       ├── me/route.ts
+│   │       │       ├── chats/route.ts                          <span class="c"># POST create, GET list</span>
+│   │       │       ├── chats/[chatId]/route.ts                 <span class="c"># GET one (+ active run)</span>
+│   │       │       ├── chats/[chatId]/messages/route.ts        <span class="c"># GET history, POST send turn</span>
+│   │       │       ├── runs/[runId]/route.ts                   <span class="c"># GET status</span>
+│   │       │       ├── runs/[runId]/token/route.ts             <span class="c"># POST realtime token</span>
+│   │       │       └── runs/[runId]/cancel/route.ts            <span class="c"># POST cancel</span>
+│   │       ├── http/
+│   │       │   └── with-route.ts          <span class="c"># Clerk JWT → provisioning → zod → handler → error envelope</span>
+│   │       └── services/
+│   │           ├── turns.ts               <span class="c"># send-turn: rate limit, admission, dispatch (send-only rate limit Day 1)</span>
+│   │           └── realtime.ts            <span class="c"># trigger, cancel, public token minting</span>
+│   ├── <span class="d">worker/</span>                           <span class="c"># service: worker (Trigger.dev)</span>
+│   │   ├── Dockerfile                     <span class="c"># self-host only; cloud uses `trigger deploy`</span>
+│   │   ├── trigger.config.ts              <span class="c"># dirs, retries, syncEnvVars, prisma extension</span>
+│   │   └── src/
+│   │       ├── queues.ts                  <span class="c"># agent-turns, tool-runs (limits from env)</span>
+│   │       ├── services.ts                <span class="c"># lazy OpenRouter + Magica clients</span>
+│   │       ├── streams.ts                 <span class="c"># assistantStream = streams.define&lt;StreamPart&gt;</span>
+│   │       ├── tasks/agent/agent-turn.ts
+│   │       ├── tasks/tools/magica-run.ts
+│   │       └── adapters/                  <span class="c"># bind packages/agent ports to Trigger + db</span>
+│   │           ├── run-meta.ts            <span class="c"># RunMeta snapshot → run metadata</span>
+│   │           └── stream-coalescer.ts    <span class="c"># batch token deltas (50 ms / 64 chars)</span>
+│   └── <span class="d">migrator/</span>
+│       ├── Dockerfile                     <span class="c"># runs: prisma migrate deploy</span>
+│       └── entrypoint.sh
+├── <span class="d">packages/</span>
+│   ├── config/  contracts/  db/  auth/  observability/
+│   ├── llm/     magica/     tools/   agent/
+│   └── <span class="c">(each: src/, package.json with "exports", vitest tests next to code)</span>
+├── <span class="d">packages/db/prisma/</span>
+│   ├── schema.prisma
+│   └── migrations/                        <span class="c"># includes hand-written partial unique index</span>
+├── <span class="d">docker/</span>
+│   └── docker-compose.yml                 <span class="c"># postgres, migrator, api, worker (trigger dev)</span>
+├── <span class="d">docs/</span>                                 <span class="c"># design notes, ADRs (not in code comments)</span>
+├── pnpm-workspace.yaml
+├── vitest.config.ts                       <span class="c"># one test run for all packages and apps</span>
+└── .env.example                           <span class="c"># per-service sections, no values</span></div>
+
+<h3 id="secrets">1.4 Secrets and config per service (least privilege)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>api</th><th>worker</th><th>migrator</th><th>web</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>DATABASE_URL</code> (pooled)</td><td>✓</td><td>✓</td><td></td><td></td><td><code>connection_limit=1</code> per serverless instance</td></tr>
+<tr><td><code>DIRECT_URL</code></td><td></td><td></td><td>✓</td><td></td><td>Migrations only</td></tr>
+<tr><td><code>CLERK_JWT_KEY</code>, <code>CLERK_SECRET_KEY</code></td><td>✓</td><td></td><td></td><td></td><td>Networkless JWT verification</td></tr>
+<tr><td><code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code></td><td></td><td></td><td></td><td>✓</td><td>Public by design</td></tr>
+<tr><td><code>FRONTEND_ORIGIN</code></td><td>✓</td><td></td><td></td><td></td><td>CORS allow-list and <code>authorizedParties</code></td></tr>
+<tr><td><code>TRIGGER_SECRET_KEY</code></td><td>✓</td><td>✓ (injected)</td><td></td><td></td><td>api triggers, cancels, and mints public tokens</td></tr>
+<tr><td><code>OPENROUTER_API_KEY</code>, <code>OPENROUTER_MODEL</code></td><td></td><td>✓</td><td></td><td></td><td>Boot fails unless the model is <code>openrouter/free</code></td></tr>
+<tr><td><code>MAGICA_API_KEY</code>, <code>MAGICA_BASE_URL</code></td><td></td><td>✓</td><td></td><td></td><td><b>Never</b> in api, web, prompts, logs or DB</td></tr>
+<tr><td><code>MAGICA_MODE</code>, <code>MAGICA_DAILY_CAP_MICRO</code></td><td></td><td>✓</td><td></td><td></td><td><code>fixture</code> by default in dev/test</td></tr>
+<tr><td><code>NEW_USER_GRANT_MICRO</code>, <code>MIN_ADMISSION_MICRO</code></td><td>✓</td><td>✓</td><td></td><td></td><td>App credits, separate from the Magica account balance</td></tr>
+<tr><td><code>AGENT_QUEUE_CONCURRENCY</code>, <code>TOOL_QUEUE_CONCURRENCY</code>, <code>AGENT_MAX_STEPS</code></td><td></td><td>✓</td><td></td><td></td><td>Tuning knobs without a code change</td></tr>
+</tbody></table></div>
+
+<h3 id="scale">1.5 Scalability: target is 1,000 concurrent turns, 100 tools/skills, long chats</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Dimension</th><th>Mechanism</th><th>Where</th><th>Headroom / risk</th></tr></thead>
+<tbody>
+<tr><td>Request path</td><td>No LLM or tool work in requests. Sending a turn is one short transaction (3 inserts) plus one Trigger.dev API call</td><td>api</td><td>~80–150 ms per send (estimated). Stateless horizontal scale</td></tr>
+<tr><td>Concurrent turns</td><td>Queue <code>agent-turns</code> with <code>concurrencyLimit</code> from env, and <code>concurrencyKey = chatId</code> so each chat runs one turn at a time in the queue itself</td><td>worker</td><td>The Trigger.dev plan limit caps real concurrency. Our code has no fixed cap</td></tr>
+<tr><td>Waiting is free</td><td><code>wait.forToken</code> / <code>wait.for</code> checkpoint the run: no compute and no concurrency slot while Magica works</td><td>worker</td><td>Thousands of in-flight tool runs cost nothing while suspended</td></tr>
+<tr><td>Provider rate limits</td><td>Separate <code>tool-runs</code> queue limited to Magica's rate; bounded backoff on 429 for LLM and Magica</td><td>worker</td><td>The OpenRouter free tier is the real ceiling. Fail with a clear message rather than queue forever</td></tr>
+<tr><td>DB writes</td><td>Tokens are <b>not</b> written to Postgres. One content write per LLM step and one per tool completion. Realtime goes through Trigger.dev</td><td>worker</td><td>~3–6 writes per turn (estimated) instead of hundreds</td></tr>
+<tr><td>DB connections</td><td>Neon pooler (PgBouncer transaction mode), <code>connection_limit=1</code>, short transactions, no transaction open across network calls</td><td>api, worker</td><td>Pooler cap is the thing to monitor</td></tr>
+<tr><td>Long conversations</td><td>Cursor pagination on <code>(chatId, createdAt DESC, id DESC)</code>, with every index column in the same direction as the <code>ORDER BY</code> and a row-comparison seek <code>(createdAt, id) &lt; ($c, $i)</code>; the LLM history window is bounded (last N messages + summary later)</td><td>api, agent</td><td>Reads are O(page size), independent of chat length</td></tr>
+<tr><td>Realtime fan-out</td><td>Browser subscribes straight to Trigger.dev with a run-scoped token. Deltas are coalesced every 50 ms / 64 chars before <code>append</code></td><td>web, worker</td><td>Our servers don't carry socket load</td></tr>
+<tr><td>100 tools</td><td>One registry map; nothing in orchestration branches per tool. Later, send only relevant tool specs per turn (tool search) to keep prompts small</td><td>tools, agent</td><td>Adding a tool is one file plus one line</td></tr>
+<tr><td>Duplicate protection</td><td>Unique DB keys at every side effect (see <a href="#l-races">race table</a>)</td><td>db</td><td>Exactly-once charges are enforced by constraints, not only by app logic</td></tr>
+</tbody></table></div>
+
+<!-- ============================ 2 ============================ -->
+<h2 id="flows"><span class="n">2</span>Flow diagrams</h2>
+<p class="section-intro">Each diagram shows one concern. Participant names match folder names so a diagram maps directly to code.</p>
+
+<h3 id="f-arch">2.1 System architecture</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph Browser
+    FE["web&lt;br/&gt;Next.js · TanStack Query · Zustand"]
+  end
+  subgraph Backend["galaxy-chat-backend"]
+    API["apps/api&lt;br/&gt;route handlers · Vercel"]
+    subgraph Worker["apps/worker · Trigger.dev"]
+      AT["agent-turn&lt;br/&gt;queue agent-turns"]
+      MR["magica-run&lt;br/&gt;queue tool-runs"]
+    end
+    MIG["apps/migrator"]
+  end
+  subgraph Managed["Managed services"]
+    CLK["Clerk"]
+    PG[("Postgres · Neon")]
+    TR["Trigger.dev cloud&lt;br/&gt;queues · checkpoints · realtime"]
+    OR["OpenRouter&lt;br/&gt;openrouter/free"]
+    MG["Magica API"]
+  end
+  FE -- "sign in, session JWT" --> CLK
+  FE -- "REST + Bearer JWT" --> API
+  FE -- "realtime, run-scoped token" --> TR
+  API -- "verify JWT with public key" --> CLK
+  API -- "SQL pooled" --> PG
+  API -- "trigger · cancel · mint token" --> TR
+  TR -- "executes" --> AT
+  AT -- "triggerAndWait" --> MR
+  AT -- "SQL pooled" --> PG
+  MR -- "SQL pooled" --> PG
+  AT -- "chat completions, SSE" --> OR
+  MR -- "POST run · GET run" --> MG
+  MG -- "webhook to token URL" --> TR
+  MIG -- "DDL direct" --> PG
+</pre></div>
+<p class="cap">The browser never calls the worker, OpenRouter or Magica. Keys for those exist only in the worker.</p>
+
+<h3 id="f-auth">2.2 Authentication and authorization</h3>
+<p>There are four credentials, one per boundary. Each is checked where it enters.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Boundary</th><th>Credential</th><th>Issued by</th><th>Verified by</th><th>Lifetime</th><th>Scope</th></tr></thead>
+<tbody>
+<tr><td>Browser → api</td><td>Clerk session JWT (<code>Authorization: Bearer</code>)</td><td>Clerk (via <code>getToken()</code>)</td><td>api middleware: RS256 signature with <code>CLERK_JWT_KEY</code>, <code>exp</code>/<code>nbf</code>, <code>azp ∈ FRONTEND_ORIGIN</code></td><td>~60 s, auto-refreshed by the SDK</td><td>One user (<code>sub</code>)</td></tr>
+<tr><td>Browser → Trigger.dev realtime</td><td>Public access token (JWT)</td><td>api, after an ownership check</td><td>Trigger.dev</td><td>1 h, refreshed via <code>POST /runs/:id/token</code></td><td><b>Read-only, one run</b></td></tr>
+<tr><td>api / worker → Trigger.dev</td><td><code>TRIGGER_SECRET_KEY</code></td><td>Trigger.dev</td><td>Trigger.dev</td><td>Static secret</td><td>Project</td></tr>
+<tr><td>worker → OpenRouter / Magica</td><td>API keys</td><td>Providers</td><td>Providers</td><td>Static secret</td><td>Account</td></tr>
+<tr><td>Magica → Trigger.dev</td><td>Token callback URL (unguessable)</td><td>Trigger.dev <code>wait.createToken</code></td><td>Trigger.dev</td><td>10 min</td><td>Can only <i>wake</i> one run; the payload is ignored and the result is re-fetched with <code>GET</code></td></tr>
+</tbody></table></div>
+<p><b>Authorization is enforced in the data layer.</b> Every repository read or write takes <code>userId</code> and puts it in the <code>WHERE</code> clause (<code>chats.getOwned(userId, chatId)</code>). Route handlers can't import Prisma; a lint rule enforces this. A resource that doesn't exist and one owned by someone else both return <code>404 not_found</code>, so nothing leaks. Workers never receive user input as authority: the payload is only IDs, and all state is reloaded from the DB.</p>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant FE as web
+  participant CK as Clerk
+  participant MW as api middleware
+  participant H as route handler
+  participant DB as Postgres
+  U->>FE: open app
+  FE->>CK: sign in (Clerk components)
+  CK-->>FE: session established on frontend origin
+  FE->>CK: getToken() (cached until near expiry)
+  CK-->>FE: JWT sub, sid, azp, exp about 60s
+  FE->>MW: request + Authorization Bearer JWT + X-Request-Id
+  MW->>MW: CORS: Origin must equal FRONTEND_ORIGIN
+  MW->>MW: verify signature with CLERK_JWT_KEY (no network)
+  MW->>MW: check exp, nbf, azp
+  alt missing, invalid or expired
+    MW-->>FE: 401 unauthenticated
+    FE->>CK: getToken skipCache, retry once
+  end
+  MW->>H: principal clerkUserId, traceId
+  H->>DB: upsert User by clerkId, first time also grant ledger row
+  DB-->>H: user id, balanceMicro
+  H->>DB: repository call scoped by userId
+  alt not owned or missing
+    H-->>FE: 404 not_found (same body either way)
+  else owned
+    H-->>FE: 2xx
+  end
+</pre></div>
+<p class="cap">User provisioning is lazy and idempotent: the unique <code>clerkId</code> plus the ledger key <code>grant:&lt;userId&gt;</code> mean parallel first requests create exactly one user and one grant. A Clerk <code>user.deleted</code> webhook comes Day 2 or later.</p>
+
+<h3 id="f-send">2.3 Send a turn, end to end</h3>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant FE as web
+  participant API as apps/api
+  participant DB as Postgres
+  participant TR as Trigger.dev
+  participant AT as agent-turn
+  participant OR as OpenRouter
+  participant MR as magica-run
+  participant MG as Magica
+  FE->>API: POST /v1/chats/:chatId/messages clientMessageId, text
+  API->>DB: TX insert user Message + AgentRun queued
+  Note over DB: partial unique index = one active run per chat
+  API->>TR: tasks.trigger agent-turn runId, idempotencyKey runId
+  TR-->>API: triggerRunId + publicAccessToken
+  API->>DB: save triggerRunId on AgentRun
+  API-->>FE: 202 runId, realtime token
+  FE->>TR: subscribe run metadata + assistant stream
+  TR->>AT: start
+  AT->>DB: run running, upsert assistant Message streaming
+  loop each step, max AGENT_MAX_STEPS
+    AT->>OR: chat completions stream, tools
+    OR-->>AT: text, reasoning, tool call deltas
+    AT-->>TR: stream parts + metadata thinking
+    TR-->>FE: tokens live
+    AT->>DB: checkpoint step blocks, routed model, usage
+    opt tool calls returned
+      AT->>DB: upsert ToolInvocation runId + toolCallId
+      AT->>MR: triggerAndWait toolInvocationId
+      MR->>MG: POST run crop_image, webhook = token URL
+      MG-->>MR: 202 magicaRunId
+      MR->>DB: save magicaRunId, status running
+      Note over MR: suspended on wait token, no compute
+      MG->>TR: webhook POST to token URL
+      TR->>MR: resume
+      MR->>MG: GET run, source of truth
+      MR->>DB: output, credits, duration, status completed
+      MR-->>AT: result
+      AT->>DB: settle ledger once, tool_result + asset blocks
+      AT-->>TR: metadata tool completed + asset URL
+    end
+  end
+  AT->>DB: message success, run completed
+  AT-->>TR: metadata complete
+  TR-->>FE: complete
+  FE->>API: refetch messages, drop the live bubble
+</pre></div>
+
+<h3 id="f-loop">2.4 Agent loop (inside <code>agent-turn</code>)</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["load run + chat from DB"] --> B{"run already terminal?"}
+  B -- yes --> Z["return, idempotent redelivery"]
+  B -- no --> C["mark running · upsert assistant message"]
+  C --> D["load bounded history · map ContentBlocks to LLM messages"]
+  D --> E["step = step + 1 · meta thinking"]
+  E --> F["stream OpenRouter with tool specs"]
+  F --> G{"stream outcome"}
+  G -- "429 or 503" --> G1["backoff 1s, 3s, 9s"] --> F
+  G -- "retries exhausted" --> X["fail: llm_unavailable"]
+  G -- "empty" --> G2{"first empty?"}
+  G2 -- yes --> F
+  G2 -- no --> X
+  G -- "ok" --> H["checkpoint step to DB"]
+  H --> I{"tool calls?"}
+  I -- no --> DONE["finalize success"]
+  I -- yes --> J["meta working · for each call, parallel"]
+  J --> K{"known tool and args valid?"}
+  K -- no --> K1["tool_result error back to model"]
+  K -- yes --> L{"balance at least estimate?"}
+  L -- no --> STOP["stop safely: insufficient_credits"]
+  L -- yes --> M["upsert ToolInvocation · triggerAndWait magica-run"]
+  M --> N["settle ledger once · append results in seq order"]
+  K1 --> O{"step below max?"}
+  N --> O
+  O -- yes --> E
+  O -- no --> DONE
+  X --> FAIL["finalize failed · keep partial text, tools, assets"]
+  STOP --> FAIL
+</pre></div>
+
+<h3 id="f-magica">2.5 Magica tool run (inside <code>magica-run</code>)</h3>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant AT as agent-turn
+  participant MR as magica-run
+  participant DB as Postgres
+  participant TR as Trigger.dev
+  participant MG as Magica
+  AT->>MR: triggerAndWait toolInvocationId, idempotencyKey = same id
+  MR->>DB: load ToolInvocation
+  alt already terminal
+    MR-->>AT: stored output, no new work
+  end
+  MR->>TR: wait.createToken timeout 10m, idempotencyKey magica:id
+  TR-->>MR: token id + callback URL
+  alt no magicaRunId yet
+    MR->>DB: status dispatching
+    MR->>MG: POST /v1/nodes/crop_image/run input, webhook url = token URL
+    MG-->>MR: 202 runId
+    MR->>DB: magicaRunId, status running, startedAt
+  else status dispatching and no runId, crashed mid-POST
+    MR->>DB: failed: dispatch_uncertain, no re-POST
+  end
+  MR->>TR: wait.forToken, checkpointed
+  MG->>TR: POST token URL on completed, failed or canceled
+  TR->>MR: resume, payload ignored
+  MR->>MG: GET /v1/nodes/runs/runId
+  loop while not terminal, max 60 times
+    MR->>TR: wait.for 5s
+    MR->>MG: GET run
+  end
+  alt COMPLETED
+    MR->>DB: output via tool mapper, creditsMicro, durationMs, completed
+  else FAILED or CANCELED
+    MR->>DB: failed or cancelled with userMessage
+  end
+  MR-->>AT: typed result
+</pre></div>
+
+<h3 id="f-rt">2.6 Realtime, reconnect and reload</h3>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant FE as web
+  participant API as apps/api
+  participant DB as Postgres
+  participant TR as Trigger.dev
+  Note over FE: user reloads mid-turn
+  FE->>API: GET /v1/chats/:chatId
+  API->>DB: chat + active run lookup
+  API-->>FE: chat, activeRun runId, status
+  FE->>API: GET /v1/chats/:chatId/messages
+  API-->>FE: persisted blocks, assistant message streaming, checkpointStep
+  FE->>API: POST /v1/runs/:runId/token
+  API->>DB: ownership check
+  API->>TR: mint read token for triggerRunId
+  API-->>FE: publicAccessToken, expiresAt
+  FE->>TR: subscribe metadata + assistant stream from 0
+  TR-->>FE: parts with step numbers
+  Note over FE: render persisted blocks for step up to checkpointStep, live parts only for later steps, so nothing is shown twice
+  alt realtime transport fails
+    FE->>FE: bounded retry 1s, 2s, 4s, 8s, 16s
+    FE->>API: fallback: poll GET /v1/runs/:runId every 3s
+  end
+  alt token near expiry
+    FE->>API: POST /v1/runs/:runId/token
+  end
+  TR-->>FE: metadata complete
+  FE->>API: refetch messages, persisted row replaces live bubble
+</pre></div>
+
+<h3 id="f-state">2.7 State machines</h3>
+<div class="grid2">
+<div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> queued: send admitted
+  queued --> running: worker starts
+  queued --> failed: dispatch failed
+  running --> waiting: approval (Day 2)
+  waiting --> running: approved
+  running --> completed
+  running --> failed
+  running --> cancelled: cancel
+  queued --> cancelled: cancel
+  completed --> [*]
+  failed --> [*]
+  cancelled --> [*]
+</pre></div>
+<div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> pending: row upserted
+  pending --> dispatching: before POST
+  dispatching --> running: magicaRunId saved
+  dispatching --> failed: dispatch uncertain
+  pending --> failed: invalid or no credits
+  running --> completed
+  running --> failed
+  running --> cancelled
+  completed --> [*]
+  failed --> [*]
+  cancelled --> [*]
+</pre></div>
+</div>
+<p class="cap">Left: <code>AgentRun.status</code>. The partial unique index covers <code>queued</code>, <code>running</code> and <code>waiting</code>. Right: <code>ToolInvocation.status</code>. The assistant <code>Message.status</code> follows the run: <code>streaming → success | failed | cancelled</code>.</p>
+
+<h3 id="f-er">2.8 Data model (Day 1)</h3>
+<div class="diagram"><pre class="mermaid">
+erDiagram
+  User ||--o{ Chat : owns
+  User ||--o{ CreditLedger : has
+  User ||--o{ AgentRun : starts
+  Chat ||--o{ Message : contains
+  Chat ||--o{ AgentRun : runs
+  AgentRun ||--o| Message : "assistant reply"
+  AgentRun ||--o{ ToolInvocation : calls
+  AgentRun |o--o{ CreditLedger : "charged in"
+  ToolInvocation |o--o{ CreditLedger : "charged for"
+  User {
+    string id PK
+    string clerkId UK
+    bigint balanceMicro
+  }
+  Chat {
+    string id PK
+    string userId FK
+    string title
+    bool pinned
+    datetime updatedAt
+  }
+  Message {
+    string id PK
+    string chatId FK
+    enum role
+    enum status
+    jsonb content
+    string clientMessageId
+    string runId UK
+    int checkpointStep
+  }
+  AgentRun {
+    string id PK
+    string chatId FK
+    string userId FK
+    string userMessageId UK
+    enum status
+    string triggerRunId UK
+    int steps
+    string_array routedModels
+  }
+  ToolInvocation {
+    string id PK
+    string runId FK
+    string toolCallId
+    int seq
+    enum status
+    jsonb input
+    jsonb output
+    string magicaRunId UK
+    bigint creditsMicro
+  }
+  CreditLedger {
+    string id PK
+    string userId FK
+    string runId FK
+    string toolInvocationId FK
+    bigint deltaMicro
+    string idempotencyKey UK
+  }
+  ProviderSpendDaily {
+    string provider PK
+    date day PK
+    bigint spentMicro
+  }
+</pre></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Constraint / index</th><th>Guarantees</th></tr></thead>
+<tbody>
+<tr><td><code>UNIQUE AgentRun(chatId) WHERE status IN ('queued','running','waiting')</code></td><td>One active run per chat, enforced by the database</td></tr>
+<tr><td><code>UNIQUE Message(chatId, clientMessageId)</code></td><td>A double-submit returns the same turn</td></tr>
+<tr><td><code>UNIQUE Message(runId)</code>, <code>UNIQUE AgentRun(userMessageId)</code></td><td>Exactly one assistant message and one run per user message</td></tr>
+<tr><td><code>UNIQUE ToolInvocation(runId, toolCallId)</code>, <code>UNIQUE (magicaRunId)</code></td><td>A tool call runs once, even after a worker retry</td></tr>
+<tr><td><code>UNIQUE CreditLedger(idempotencyKey)</code></td><td>Each grant and charge happens once (<code>grant:&lt;userId&gt;</code>, <code>tool:&lt;toolInvocationId&gt;</code>)</td></tr>
+<tr><td><code>Chat(userId, updatedAt DESC, id DESC)</code>, <code>Message(chatId, createdAt DESC, id DESC)</code></td><td>Cursor pagination with no extra sort step. <b>Every column goes in the same direction as the ORDER BY</b>; one ASC column would force Postgres to sort each page. Queried with a row comparison <code>(createdAt, id) &lt; cursor</code> through <code>$queryRaw</code></td></tr>
+<tr><td><code>AgentRun(userId, createdAt)</code></td><td>Per-user send rate limit and the <code>AgentRun.userId</code> foreign key</td></tr>
+<tr><td><code>CreditLedger(runId)</code>, <code>CreditLedger(toolInvocationId)</code>, FKs <code>ON DELETE SET NULL</code></td><td>Ledger links are real foreign keys and indexed (Postgres doesn't index foreign keys automatically), and credit history survives when a chat is deleted</td></tr>
+<tr><td><code>ProviderSpendDaily(provider, day)</code> PK</td><td>The daily Magica spend cap is a single-row read with an atomic conditional increment, never a <code>SUM</code> over tool rows</td></tr>
+</tbody></table></div>
+
+<!-- ============================ 3 ============================ -->
+<h2 id="apis"><span class="n">3</span>API reference (Day 1)</h2>
+<p class="section-intro">All request and response bodies are Zod schemas in <code>@gx/contracts</code> and appear in <code>/api/openapi.json</code>. The frontend's types are generated from that file, so there are no hand-copied types.</p>
+
+<h3 id="api-conv">3.1 Conventions</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Topic</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td>Base path</td><td><code>/api/v1</code>. Breaking changes go to <code>/api/v2</code></td></tr>
+<tr><td>Auth</td><td><code>Authorization: Bearer &lt;Clerk session JWT&gt;</code> on every <code>/v1</code> route</td></tr>
+<tr><td>Tracing</td><td>Client sends <code>X-Request-Id</code> (uuid). The api generates one if missing and echoes it as <code>X-Trace-Id</code>. It is in every log line and error body</td></tr>
+<tr><td>Error envelope</td><td><code>{ "error": { "code", "message", "traceId", "details"? } }</code>. <code>message</code> is always safe to show a user</td></tr>
+<tr><td>Pagination</td><td><code>?cursor=&amp;limit=</code> (limit 1–50, default 30) → <code>{ items, nextCursor | null }</code>. The cursor is opaque base64url of <code>(timestamp, id)</code></td></tr>
+<tr><td>IDs</td><td>cuid strings. Money is in microcredits as <b>strings</b> in JSON (BigInt-safe), plus a <code>formatted</code> value</td></tr>
+<tr><td>Rate limits</td><td><b>Day 1:</b> sends only, 10/min/user, counted from <code>AgentRun(userId, createdAt)</code>. <b>Day 2:</b> 120/min/user on all other routes through a <code>RateLimiter</code> backend (a <code>RateLimitBucket</code> table or Redis). <code>429</code> + <code>Retry-After</code></td></tr>
+<tr><td>CORS</td><td>Only <code>FRONTEND_ORIGIN</code>. Methods <code>GET, POST, OPTIONS</code>. Preflight cached 600 s. No cookies (Bearer only)</td></tr>
+</tbody></table></div>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Error code</th><th>HTTP</th><th>When</th></tr></thead>
+<tbody>
+<tr><td><code>unauthenticated</code></td><td class="num">401</td><td>Missing, invalid or expired JWT, or wrong <code>azp</code></td></tr>
+<tr><td><code>insufficient_credits</code></td><td class="num">402</td><td>Balance below <code>MIN_ADMISSION_MICRO</code> at send time</td></tr>
+<tr><td><code>not_found</code></td><td class="num">404</td><td>Resource missing <i>or</i> owned by another user</td></tr>
+<tr><td><code>run_active</code></td><td class="num">409</td><td>The chat already has a queued or running turn. <code>details.activeRunId</code> lets the UI re-attach</td></tr>
+<tr><td><code>validation_failed</code></td><td class="num">422</td><td>Zod failure. <code>details.issues[]</code> has the path and message</td></tr>
+<tr><td><code>rate_limited</code></td><td class="num">429</td><td>Per-user limit exceeded</td></tr>
+<tr><td><code>dispatch_failed</code></td><td class="num">503</td><td>Trigger.dev unreachable after the transaction; the run is marked failed and is safe to resend</td></tr>
+<tr><td><code>internal</code></td><td class="num">500</td><td>Unexpected; logged with the stack, with only the traceId shown to the user</td></tr>
+</tbody></table></div>
+
+<h3 id="api-list">3.2 Endpoint list</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Purpose</th><th>Success</th></tr></thead>
+<tbody>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/health</code></td><td>none</td><td>Liveness + DB ping</td><td class="num">200</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/openapi.json</code></td><td>none</td><td>Generated contract</td><td class="num">200</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/v1/me</code></td><td><span class="pill auth">JWT</span></td><td>Profile + credit balance (provisions the user on first call)</td><td class="num">200</td></tr>
+<tr><td><span class="pill post">POST</span></td><td><code>/api/v1/chats</code></td><td><span class="pill auth">JWT</span></td><td>Create a chat</td><td class="num">201</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/v1/chats</code></td><td><span class="pill auth">JWT</span></td><td>List chats, newest activity first</td><td class="num">200</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/v1/chats/:chatId</code></td><td><span class="pill auth">JWT</span></td><td>One chat + its active run (reload recovery)</td><td class="num">200</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/v1/chats/:chatId/messages</code></td><td><span class="pill auth">JWT</span></td><td>History, newest first</td><td class="num">200</td></tr>
+<tr><td><span class="pill post">POST</span></td><td><code>/api/v1/chats/:chatId/messages</code></td><td><span class="pill auth">JWT</span></td><td><b>Send a turn</b>: persist + dispatch</td><td class="num">202</td></tr>
+<tr><td><span class="pill get">GET</span></td><td><code>/api/v1/runs/:runId</code></td><td><span class="pill auth">JWT</span></td><td>Run status, tools, assistant message (REST fallback)</td><td class="num">200</td></tr>
+<tr><td><span class="pill post">POST</span></td><td><code>/api/v1/runs/:runId/token</code></td><td><span class="pill auth">JWT</span></td><td>Mint or refresh a realtime read token</td><td class="num">200</td></tr>
+<tr><td><span class="pill post">POST</span></td><td><code>/api/v1/runs/:runId/cancel</code></td><td><span class="pill auth">JWT</span></td><td>Stop an active turn</td><td class="num">202</td></tr>
+</tbody></table></div>
+
+<h3 id="api-detail">3.3 Endpoint details</h3>
+
+<div class="api" id="api-send">
+  <div class="api-head"><span class="pill post">POST</span><span class="path">/api/v1/chats/:chatId/messages</span><span class="pill auth">JWT</span><span class="pill">rate 10/min</span></div>
+  <div class="purpose">Saves the user's message, creates a queued run, and dispatches it to the worker. Returns immediately with what the client needs to subscribe. No LLM work happens inside this request.</div>
+<pre class="code"><span class="c">// request</span>
+{ "clientMessageId": "uuid v4",          <span class="c">// idempotency key, generated per send by the client</span>
+  "text": "string, 1..8000 chars, trimmed" }
+
+<span class="c">// 202 Accepted (new) · 200 OK (same clientMessageId replayed)</span>
+{ "chatId": "c…", "messageId": "m…", "runId": "r…",
+  "realtime": { "triggerRunId": "run_…", "publicAccessToken": "eyJ…", "expiresAt": "ISO-8601" } }</pre>
+  <dl class="kv">
+    <dt>Errors</dt><dd><code>401</code> · <code>404</code> chat not owned · <code>422</code> text length · <code>402</code> balance &lt; <code>MIN_ADMISSION_MICRO</code> (5,000) · <code>409 run_active</code> + <code>activeRunId</code> · <code>429</code> · <code>503 dispatch_failed</code></dd>
+    <dt>DB writes</dt><dd>One transaction: <code>Message(role=user)</code>, <code>AgentRun(status=queued, userId, userMessageId)</code>, <code>Chat.updatedAt</code>. After commit: <code>AgentRun.triggerRunId</code></dd>
+    <dt>External</dt><dd><code>tasks.trigger("agent-turn", {runId}, {idempotencyKey: runId, queue: "agent-turns", concurrencyKey: chatId, tags: ["chat:…","user:…"]})</code></dd>
+    <dt>Idempotency</dt><dd>At three levels: <code>clientMessageId</code> unique per chat → the replay returns the original run. The partial unique index blocks a second active run. The Trigger idempotency key blocks a duplicate task</dd>
+    <dt>Latency</dt><dd>~80–150 ms (estimated: 1 tx + 1 Trigger API call)</dd>
+  </dl>
+</div>
+
+<div class="api">
+  <div class="api-head"><span class="pill get">GET</span><span class="path">/api/v1/chats/:chatId/messages?cursor=&amp;limit=30</span><span class="pill auth">JWT</span></div>
+  <div class="purpose">Message history, newest first. The UI reverses each page for display. Also used after a run finishes, to swap the live bubble for the saved message.</div>
+<pre class="code"><span class="c">// 200</span>
+{ "items": [{
+    "id": "m…", "role": "user|assistant", "status": "streaming|success|failed|cancelled",
+    "runId": "r…|null", "checkpointStep": 2,
+    "content": [ ContentBlock ],       <span class="c">// text | thinking | tool_use | tool_result | asset</span>
+    "error": { "code", "message", "retryable" } | null,
+    "createdAt": "ISO-8601" }],
+  "nextCursor": "base64url|null" }</pre>
+  <dl class="kv">
+    <dt>Query</dt><dd><code>WHERE chatId=$1 AND (createdAt,id) &lt; cursor ORDER BY createdAt DESC, id DESC LIMIT n+1</code> after <code>chats.getOwned</code>. The extra row tells us whether a next page exists</dd>
+    <dt>Errors</dt><dd><code>401</code> · <code>404</code> · <code>422</code> bad cursor or limit</dd>
+    <dt>Read safety</dt><dd>Each row's <code>content</code> is parsed with <code>ContentBlock[]</code> on read. A corrupt row is replaced by an <code>error</code> block, so one bad row can't break the page</dd>
+  </dl>
+</div>
+
+<div class="api">
+  <div class="api-head"><span class="pill get">GET</span><span class="path">/api/v1/runs/:runId</span><span class="pill auth">JWT</span></div>
+  <div class="purpose">Server-side state of one run. This is the REST fallback when realtime is down, and the way to reconcile a run's state after a reconnect.</div>
+<pre class="code"><span class="c">// 200</span>
+{ "run": { "id", "chatId", "status": "queued|running|waiting|completed|failed|cancelled",
+           "steps": 2, "routedModels": ["meta-llama/…:free"], "error": SafeError|null,
+           "createdAt", "finishedAt"|null },
+  "tools": [{ "toolCallId", "seq", "name": "crop_image", "status",
+              "input": {…sanitized}, "output": {…}|null, "durationMs", "credits": "5000",
+              "error": SafeError|null }],
+  "assistantMessage": Message|null }</pre>
+  <dl class="kv">
+    <dt>Auth check</dt><dd><code>AgentRun.userId = principal</code> (denormalized, no join)</dd>
+    <dt>Errors</dt><dd><code>401</code> · <code>404</code></dd>
+  </dl>
+</div>
+
+<div class="api">
+  <div class="api-head"><span class="pill post">POST</span><span class="path">/api/v1/runs/:runId/token</span><span class="pill auth">JWT</span></div>
+  <div class="purpose">Mints a Trigger.dev public token that can only read this run. Used after a reload, and before the 1 h expiry.</div>
+<pre class="code"><span class="c">// 200</span>
+{ "triggerRunId": "run_…", "publicAccessToken": "eyJ…", "expiresAt": "ISO-8601" }</pre>
+  <dl class="kv">
+    <dt>How</dt><dd><code>auth.createPublicToken({ scopes: { read: { runs: [triggerRunId] } }, expirationTime: "1h" })</code></dd>
+    <dt>Errors</dt><dd><code>401</code> · <code>404</code> · <code>409</code> run has no <code>triggerRunId</code> yet (dispatch failed)</dd>
+  </dl>
+</div>
+
+<div class="api">
+  <div class="api-head"><span class="pill post">POST</span><span class="path">/api/v1/runs/:runId/cancel</span><span class="pill auth">JWT</span></div>
+  <div class="purpose">Stops a turn. Idempotent: cancelling a finished run returns its final status.</div>
+<pre class="code"><span class="c">// 202 (was active) · 200 (already terminal)</span>
+{ "runId": "r…", "status": "stopping|completed|failed|cancelled" }</pre>
+  <dl class="kv">
+    <dt>Effect</dt><dd><code>runs.cancel(triggerRunId)</code>. The worker's <code>onCancel</code> hook saves partial output and sets <code>cancelled</code>. Child <code>magica-run</code> tasks are cancelled with the parent. A Magica run already started still completes and is still billed by Magica; we save the charge when we reconcile</dd>
+    <dt>Errors</dt><dd><code>401</code> · <code>404</code></dd>
+  </dl>
+</div>
+
+<div class="grid2">
+<div class="api">
+  <div class="api-head"><span class="pill post">POST</span><span class="path">/api/v1/chats</span><span class="pill auth">JWT</span></div>
+<pre class="code"><span class="c">// request</span> { "title"?: "string ≤ 120" }
+<span class="c">// 201</span>     { "id", "title", "pinned": false, "createdAt", "updatedAt" }</pre>
+  <dl class="kv"><dt>Errors</dt><dd><code>401</code> · <code>422</code> · <code>429</code></dd></dl>
+</div>
+<div class="api">
+  <div class="api-head"><span class="pill get">GET</span><span class="path">/api/v1/chats?cursor=&amp;limit=</span><span class="pill auth">JWT</span></div>
+<pre class="code"><span class="c">// 200</span> { "items": [{ "id", "title", "pinned", "updatedAt" }], "nextCursor" }</pre>
+  <dl class="kv"><dt>Order</dt><dd><code>updatedAt DESC, id DESC</code>, excluding <code>deletedAt</code>. Pinned-first comes Day 2</dd></dl>
+</div>
+<div class="api">
+  <div class="api-head"><span class="pill get">GET</span><span class="path">/api/v1/chats/:chatId</span><span class="pill auth">JWT</span></div>
+<pre class="code"><span class="c">// 200</span> { "chat": {…}, "activeRun": { "runId", "status" } | null }</pre>
+  <dl class="kv"><dt>Use</dt><dd>First call on page load. Tells the UI whether to re-attach to a live run</dd></dl>
+</div>
+<div class="api">
+  <div class="api-head"><span class="pill get">GET</span><span class="path">/api/v1/me</span><span class="pill auth">JWT</span></div>
+<pre class="code"><span class="c">// 200</span> { "user": { "id", "clerkId" },
+        "credits": { "balanceMicro": "5000000", "formatted": "5.00" } }</pre>
+  <dl class="kv"><dt>Side effect</dt><dd>Provisions the user + grant on first call (idempotent)</dd></dl>
+</div>
+</div>
+
+<h3 id="api-internal">3.4 Internal contracts (not HTTP)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Contract</th><th>Direction</th><th>Shape</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><span class="pill int">task</span> <code>agent-turn</code></td><td>api → worker</td><td><code>{ runId }</code></td><td>Queue <code>agent-turns</code>, <code>concurrencyKey: chatId</code>, retry maxAttempts 2</td></tr>
+<tr><td><span class="pill int">task</span> <code>magica-run</code></td><td>agent-turn → magica-run</td><td><code>{ toolInvocationId }</code> → <code>ToolResult</code></td><td>Queue <code>tool-runs</code>, retry 3 (network only), idempotencyKey = toolInvocationId</td></tr>
+<tr><td><span class="pill int">metadata</span> <code>RunMeta</code></td><td>worker → web</td><td><code>{ status, step, label?, tools: { [toolCallId]: { name, status, seq, durationMs?, credits?, assetUrl?, error? } } }</code></td><td>State: small, overwritten on each change</td></tr>
+<tr><td><span class="pill int">stream</span> <code>assistant</code></td><td>worker → web</td><td><code>{ t: "text" | "thinking", step, d }</code></td><td>Tokens, append-only, coalesced</td></tr>
+<tr><td><span class="pill int">out</span> OpenRouter</td><td>worker → OpenRouter</td><td><code>POST /api/v1/chat/completions { model: "openrouter/free", stream: true, tools, messages }</code></td><td>Response <code>model</code> is recorded per step</td></tr>
+<tr><td><span class="pill int">out</span> Magica</td><td>worker → Magica</td><td><code>POST /v1/nodes/crop_image/run</code> · <code>GET /v1/nodes/runs/{id}</code></td><td>Bearer key, 15 s timeout per request</td></tr>
+<tr><td><span class="pill int">in</span> token callback</td><td>Magica → Trigger.dev</td><td>Any JSON body (ignored)</td><td>Only wakes the task</td></tr>
+</tbody></table></div>
+
+<!-- ============================ 4 ============================ -->
+<h2 id="life"><span class="n">4</span>Lifecycles of the major APIs</h2>
+<p class="section-intro">Step by step, with the component responsible for each step, what gets written, and what happens when that step fails. Timings marked "est." are estimates; nothing here has been measured yet.</p>
+
+<h3 id="l-req">4.1 Every authenticated request (the <code>withRoute</code> pipeline)</h3>
+<ol class="steps">
+  <li><span class="who">middleware</span>Read or create <code>X-Request-Id</code>, then bind the logger context <code>{traceId, method, path}</code>. <code>OPTIONS</code> gets the CORS answer and returns here.</li>
+  <li><span class="who">middleware</span>CORS: <code>Origin</code> must equal <code>FRONTEND_ORIGIN</code>.<span class="fail">Mismatch → no CORS headers, so the browser blocks the response.</span></li>
+  <li><span class="who">@gx/auth</span>Extract the Bearer token and verify the RS256 signature with <code>CLERK_JWT_KEY</code> (no network, &lt;1 ms est.). Check <code>exp</code>, <code>nbf</code> and <code>azp</code>.<span class="fail">Any failure → 401 unauthenticated. The client refreshes its token once and retries.</span></li>
+  <li><span class="who">@gx/auth</span>Upsert the user by <code>clerkId</code> (lazy provisioning). On insert, write the <code>grant:&lt;userId&gt;</code> ledger row and <code>balanceMicro</code> in the same transaction. The unique keys make parallel first requests safe.</li>
+  <li><span class="who">rate-limit</span>Send route only on Day 1: count this user's <code>AgentRun</code> rows in the last 60 s (index <code>(userId, createdAt)</code>). Other routes get a <code>RateLimiter</code> backend on Day 2, behind the same interface.<span class="fail">Over the limit → 429 + Retry-After.</span></li>
+  <li><span class="who">zod</span>Parse params, query and body with the route's contract.<span class="fail">422 validation_failed with issue paths.</span></li>
+  <li><span class="who">handler</span>Call the service or repository with <code>principal.userId</code>. Ownership is part of the query itself.<span class="fail">Not owned or missing → 404 not_found.</span></li>
+  <li><span class="who">with-route</span>Serialize through the response schema (which also removes internal fields) and set <code>X-Trace-Id</code>. Any thrown <code>AppError</code> becomes the error envelope; anything else becomes 500 and is logged with its stack.</li>
+</ol>
+
+<h3 id="l-send">4.2 <code>POST /v1/chats/:chatId/messages</code>: send a turn</h3>
+<ol class="steps">
+  <li><span class="who">web</span>Generate a <code>clientMessageId</code> (uuid) and add an optimistic user bubble. Disable send while the request is in flight.</li>
+  <li><span class="who">api</span>Run the request pipeline (4.1): auth, rate limit (10/min), Zod <code>text ≤ 8000</code>.</li>
+  <li><span class="who">api</span><code>chats.getOwned(userId, chatId)</code>.<span class="fail">404.</span></li>
+  <li><span class="who">api</span>Admission: <code>balanceMicro ≥ MIN_ADMISSION_MICRO</code> (5,000 = the cheapest tool call).<span class="fail">402 insufficient_credits. Nothing is saved.</span></li>
+  <li><span class="who">api · tx</span><code>BEGIN</code> → insert <code>Message(user, clientMessageId)</code> → insert <code>AgentRun(queued)</code> → update <code>Chat.updatedAt</code> → <code>COMMIT</code>.<span class="fail">P2002 on <code>clientMessageId</code> → load the existing run and return 200 with the same body (safe replay). P2002 on the partial active-run index → 409 run_active + activeRunId.</span></li>
+  <li><span class="who">api</span><code>tasks.trigger("agent-turn", {runId}, {idempotencyKey: runId, concurrencyKey: chatId})</code>, then save <code>triggerRunId</code>.<span class="fail">Trigger.dev error or timeout (5 s) → mark the run <code>failed</code>(dispatch_failed), which frees the active-run slot, and return 503. The user message stays and the UI offers "Retry".</span></li>
+  <li><span class="who">api</span>Return <code>202</code> with <code>{chatId, messageId, runId, realtime}</code>. The public token comes from the trigger handle (read access to this run, 1 h).</li>
+  <li><span class="who">web</span>Invalidate the <code>messages</code> query (the user bubble is now real). Start <code>useRealtimeRun</code> + <code>useRealtimeStream("assistant")</code> and show the status "thinking".</li>
+</ol>
+
+<h3 id="l-turn">4.3 <code>agent-turn</code> task lifecycle (worker)</h3>
+<ol class="steps">
+  <li><span class="who">start</span>Load <code>AgentRun</code> + chat. If it's already terminal, return, which makes redelivery idempotent.</li>
+  <li><span class="who">start</span>Set <code>AgentRun.status=running</code>. Upsert the assistant <code>Message(runId, status=streaming, content=[])</code>; the unique <code>runId</code> makes this safe on retry. Set <code>meta.status="thinking"</code>.</li>
+  <li><span class="who">context</span>Load the last 40 messages, parse each with <code>ContentBlock[]</code>, and map them to OpenAI-format messages: <code>tool_use</code> → <code>tool_calls</code>, <code>tool_result</code> → <code>role:"tool"</code>. Build tool specs from the registry (<code>z.toJSONSchema(tool.input)</code>).</li>
+  <li><span class="who">step n</span>Stream OpenRouter. Text and reasoning deltas → coalescer → <code>assistantStream.append({t, step, d})</code>. Tool-call fragments are assembled by <code>index</code>.<span class="fail">429/503 → backoff 1 s, 3 s, 9 s → llm_unavailable ("Free models are busy, retry in a minute"). Empty stream → one retry → llm_empty_response.</span></li>
+  <li><span class="who">checkpoint</span>Append this step's blocks to <code>Message.content</code>, set <code>checkpointStep=n</code>, and add to <code>AgentRun.routedModels</code>, <code>steps</code> and <code>usage</code>. This is <b>one</b> write per step.</li>
+  <li><span class="who">tools</span>For each call (in parallel): registry lookup → <code>JSON.parse</code> → <code>tool.input.safeParse</code>.<span class="fail">Unknown tool, bad JSON or invalid args → <code>tool_result</code> error sent back to the model, which lets it correct itself on the next step.</span></li>
+  <li><span class="who">tools</span>Credit gate: <code>balanceMicro ≥ tool.estimateMicro(input)</code>.<span class="fail">Not enough → mark the tool failed(insufficient_credits) and <b>stop the loop</b>. Completed work stays; the turn finalizes as failed with a clear message.</span></li>
+  <li><span class="who">tools</span>Upsert <code>ToolInvocation(runId, toolCallId, seq, input=sanitized)</code>. Update meta: tool <code>running</code>, label "Cropping image…". Then <code>magicaRun.triggerAndWait({toolInvocationId}, {idempotencyKey: toolInvocationId})</code>.</li>
+  <li><span class="who">settle</span>On a completed tool, in one transaction: ledger <code>tool:&lt;id&gt;</code> <code>-creditsMicro</code> + <code>UPDATE User SET balanceMicro = balanceMicro - x</code>. P2002 means it's already settled, so skip. Append the <code>tool_result</code> + <code>asset</code> blocks; meta sets the tool to <code>completed</code> with <code>assetUrl</code>.</li>
+  <li><span class="who">loop</span>Append results in <code>seq</code> order (the order is deterministic even though the calls ran in parallel), then go to the next step, up to <code>AGENT_MAX_STEPS</code> (8).</li>
+  <li><span class="who">finalize</span>No tool calls → <code>Message.status=success</code>, <code>AgentRun.status=completed</code>, <code>finishedAt</code>, <code>meta.status="complete"</code>. Log <code>run.finished</code> with the duration, steps and credits.</li>
+  <li><span class="who">failure</span>Any terminal error → <code>Message.status=failed</code> + <code>SafeError</code>; the saved partial text, tools and assets stay. <code>AgentRun.status=failed</code>, <code>meta.status="failed"</code>. The error is re-thrown as retryable only if no side effect is at risk; otherwise <code>AbortTaskRunError</code>.</li>
+  <li><span class="who">cancel</span><code>onCancel</code>: flush the coalescer, then save partial text as <code>cancelled</code> and set <code>meta.status="cancelled"</code>.</li>
+</ol>
+
+<h3 id="l-magica">4.4 <code>magica-run</code> task lifecycle (worker, queue <code>tool-runs</code>)</h3>
+<ol class="steps">
+  <li><span class="who">load</span>Load the <code>ToolInvocation</code>. If it's terminal, return the stored result (no Magica call).</li>
+  <li><span class="who">token</span><code>wait.createToken({timeout:"10m", idempotencyKey:"magica:"+id})</code>. A retry gets the same token back (<code>isCached</code>).</li>
+  <li><span class="who">guard</span>Live mode only: reserve the estimate in one statement, <code>UPDATE "ProviderSpendDaily" SET "spentMicro" = "spentMicro" + est WHERE provider='magica' AND day=CURRENT_DATE AND "spentMicro" + est &lt;= cap</code>. It reads and locks one row. Settlement later adds <code>actual − estimate</code> in the ledger transaction.<span class="fail">0 rows updated → failed(spend_cap), with the user message "Tool budget reached for today". Concurrent calls can't overshoot the cap.</span></li>
+  <li><span class="who">dispatch</span>Set <code>status=dispatching</code>, then <code>POST /v1/nodes/crop_image/run</code> with the mapped input and <code>webhook:{url: token.url, events:[completed, failed, canceled]}</code>, then save <code>magicaRunId</code> and <code>status=running</code>.<span class="fail">400 → failed(invalid_input, Magica message). 401 → failed(unauthorized) + an error log. 403 → failed(provider_credits). 404/410 → failed(model_unavailable). 429/5xx/timeout → task retry (3×, backoff 2 s ×2).</span></li>
+  <li><span class="who">crash window</span>On retry with <code>status=dispatching</code> and no <code>magicaRunId</code>, we can't tell whether Magica accepted the POST. <b>We never POST again</b>; we fail with dispatch_uncertain, which is retryable by the user. This trades a rare failed tool for never double-charging.</li>
+  <li><span class="who">wait</span><code>wait.forToken(token.id)</code>. The run is checkpointed and uses no compute. Magica's webhook POSTs to the token URL.</li>
+  <li><span class="who">reconcile</span><code>GET /v1/nodes/runs/{magicaRunId}</code> (source of truth). If it isn't terminal, <code>wait.for(5s)</code> and GET again, up to 60 times (5 min). This covers a lost or early webhook and a token timeout.<span class="fail">Still not terminal → failed(provider_timeout). The Magica run ID is kept for later reconciliation.</span></li>
+  <li><span class="who">persist</span>COMPLETED → <code>tool.magica.fromMagicaOutput(output)</code> (Zod) → <code>output</code>, <code>creditsMicro=creditUsed</code>, <code>durationMs</code>, <code>completed</code>. FAILED/CANCELED → the matching status + <code>userMessage</code>. Return the typed result to <code>agent-turn</code>.</li>
+</ol>
+
+<h3 id="l-recover">4.5 Reload recovery and token refresh (<code>GET /chats/:id</code>, <code>GET /messages</code>, <code>POST /runs/:id/token</code>)</h3>
+<ol class="steps">
+  <li><span class="who">web</span><code>GET /v1/chats/:chatId</code> → <code>activeRun</code>. If it's null, render history only and stop here.</li>
+  <li><span class="who">web</span><code>GET /v1/chats/:chatId/messages</code> → the assistant message has <code>status=streaming</code> and a <code>checkpointStep</code>.</li>
+  <li><span class="who">api</span><code>POST /v1/runs/:runId/token</code>: ownership check via <code>AgentRun.userId</code>, then mint a read token for <code>triggerRunId</code>.</li>
+  <li><span class="who">web</span>Subscribe to metadata + the <code>assistant</code> stream from index 0. Render saved blocks for steps ≤ <code>checkpointStep</code>, and live parts only for later steps. That's what prevents duplicated text.</li>
+  <li><span class="who">web</span>On a transport error, retry with backoff 1, 2, 4, 8, 16 s. After 5 failures, switch to polling <code>GET /v1/runs/:runId</code> every 3 s and keep trying realtime in the background.</li>
+  <li><span class="who">web</span>When <code>meta.status</code> is terminal, invalidate <code>messages</code>. The saved row replaces the live bubble, and there's exactly one terminal message.</li>
+</ol>
+
+<h3 id="l-cancel">4.6 <code>POST /v1/runs/:runId/cancel</code></h3>
+<ol class="steps">
+  <li><span class="who">api</span>Run the pipeline (4.1), then load the run via <code>AgentRun.userId</code>. If it's already terminal → 200 with the final status.</li>
+  <li><span class="who">api</span><code>runs.cancel(triggerRunId)</code> → 202 <code>stopping</code>. The UI shows "Stopping…" straight away (optimistic).</li>
+  <li><span class="who">worker</span><code>onCancel</code> in <code>agent-turn</code>: flush the stream, save partial content, <code>Message=cancelled</code>, <code>AgentRun=cancelled</code>. Child <code>magica-run</code> tasks are cancelled too.</li>
+  <li><span class="who">worker</span>A Magica run already in flight may still finish on Magica's side. A cancelled invocation keeps its <code>magicaRunId</code>, and a later GET-based reconcile records the real charge so the ledger matches the provider.</li>
+</ol>
+
+<h3 id="l-races">4.7 Race conditions and how each is closed</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Race</th><th>Without a guard</th><th>Guard</th><th>Layer</th></tr></thead>
+<tbody>
+<tr><td>Double-click send</td><td>Two turns, two charges</td><td><code>UNIQUE(chatId, clientMessageId)</code> → the replay returns the same run</td><td>DB</td></tr>
+<tr><td>Two tabs send at once</td><td>Two active runs in one chat</td><td>Partial unique index → 409 + activeRunId; queue <code>concurrencyKey=chatId</code> as a second layer</td><td>DB + queue</td></tr>
+<tr><td>API crashes after commit, before trigger</td><td>A run stuck in <code>queued</code> blocks the chat</td><td>Trigger failure → run marked failed in the same request. A stale-lock sweeper comes Day 2 (a <code>queued</code> run &gt; 2 min with no <code>triggerRunId</code> → failed)</td><td>api</td></tr>
+<tr><td>Trigger redelivers agent-turn</td><td>Duplicate assistant message</td><td>Terminal check + <code>UNIQUE Message(runId)</code></td><td>worker + DB</td></tr>
+<tr><td>Worker retry mid tool call</td><td>Second Magica run, double charge</td><td><code>UNIQUE(runId, toolCallId)</code>, a terminal short-circuit, an existing <code>magicaRunId</code> is reused, and no re-POST from <code>dispatching</code></td><td>worker + DB</td></tr>
+<tr><td>Settlement retried</td><td>Double debit</td><td><code>UNIQUE CreditLedger(idempotencyKey = tool:&lt;id&gt;)</code>, with the balance updated in the same transaction</td><td>DB</td></tr>
+<tr><td>Webhook lost, early, or forged</td><td>Hung run or a spoofed result</td><td>Token payload ignored; <code>GET</code> reconcile; bounded polling fallback</td><td>worker</td></tr>
+<tr><td>Cancel racing completion</td><td>Status flips back and forth</td><td>Terminal states are final: every status update uses <code>WHERE status NOT IN (terminal)</code></td><td>DB</td></tr>
+<tr><td>Live bubble and saved message both shown</td><td>Duplicate terminal message</td><td><code>checkpointStep</code> split + swap on terminal meta</td><td>web</td></tr>
+</tbody></table></div>
+
+<div class="callout"><b>Out of Day 1 scope, but the design leaves room for each:</b> GPT Image 2 and Merge Videos (one file each in <code>@gx/tools</code>), skills (<code>@gx/skills</code> + <code>RunSkill</code> table), Transloadit uploads (<code>Attachment</code> + a signed-params route), approval waitpoints (<code>waiting</code> state + <code>Waitpoint</code> table), search and pinning, outbound webhooks (a new <code>apps/webhooks</code> worker queue) and Mintlify (it reads the same <code>openapi.json</code>).</div>
+
+</main>
+</div>
