@@ -1,0 +1,7 @@
+{
+  "name": "@gx/auth",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@gx/contracts": "workspace:*", "jose": "6.2.12" }
+}
