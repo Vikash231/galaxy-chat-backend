@@ -21,7 +21,7 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
       const message = await tx.message.create({
         data: { chatId: input.chatId, role: "user", clientMessageId: input.clientMessageId, content: [] },
       });
-      const attached = await claimAttachments(tx, input.userId, message.id, input.attachmentIds ?? []);
+      const attached = await claimAttachments(tx, input.userId, input.chatId, message.id, input.attachmentIds ?? []);
       await tx.message.update({ where: { id: message.id }, data: { content: [...attached, { type: "text", text: input.text }] as Prisma.InputJsonValue } });
       const run = await tx.agentRun.create({
         data: { chatId: input.chatId, userId: input.userId, userMessageId: message.id },

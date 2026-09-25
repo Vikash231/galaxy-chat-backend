@@ -1,5 +1,6 @@
 import type { ContentBlock } from "@gx/contracts";
 import type { LlmMessage } from "@gx/llm";
+import { refOf, withRefs } from "./files";
 import { llmCallId } from "./ids";
 
 export type StoredMessage = { role: "user" | "assistant" | "system" | "tool"; content: ContentBlock[] };
@@ -7,14 +8,15 @@ export type StoredMessage = { role: "user" | "assistant" | "system" | "tool"; co
 const textOf = (blocks: ContentBlock[]) =>
   blocks.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
 
-/** Uploaded files reach the model as URLs it can pass straight to a tool. */
+/** Uploaded files reach the model by name only; tools turn the name back into the URL. */
 const attachmentLines = (blocks: ContentBlock[]) =>
   blocks
-    .flatMap((b) => (b.type === "attachment" ? [`Attached ${b.kind} "${b.name}"${b.width && b.height ? ` (${b.width}x${b.height})` : ""}: ${b.url}`] : []))
+    .flatMap((b) => (b.type === "attachment" ? [`Attached ${b.kind} ${refOf(b)}: "${b.name}"${b.width && b.height ? ` (${b.width}x${b.height})` : ""}`] : []))
     .join("\n");
 
-export const toolResultContent = (b: Extract<ContentBlock, { type: "tool_result" }>) =>
-  JSON.stringify(b.status === "completed" ? b.output ?? {} : { error: b.error?.message ?? b.status });
+/** A tool result as the model sees it: file URLs in the output are replaced by the files' names. */
+export const toolResultContent = (b: Extract<ContentBlock, { type: "tool_result" }>, urlToRef: ReadonlyMap<string, string> = new Map()) =>
+  JSON.stringify(b.status === "completed" ? withRefs(b.output ?? {}, urlToRef) : { error: b.error?.message ?? b.status });
 
 /**
  * Rebuild the provider message list from stored blocks.
@@ -30,6 +32,7 @@ export function toLlmMessages(history: StoredMessage[]): LlmMessage[] {
     }
     if (m.role !== "assistant") continue;
     const results = new Map(m.content.flatMap((b) => (b.type === "tool_result" ? [[b.toolCallId, b] as const] : [])));
+    const urlToRef = new Map(m.content.flatMap((b) => (b.type === "asset" ? [[b.url, refOf(b)] as const] : [])));
     let text = "";
     let calls: { key: string; name: string; input: unknown }[] = [];
     const flush = () => {
@@ -42,7 +45,7 @@ export function toLlmMessages(history: StoredMessage[]): LlmMessage[] {
           tool_calls: answered.map((c) => ({ id: llmCallId(c.key), type: "function" as const, function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) } })),
         }),
       });
-      for (const c of answered) out.push({ role: "tool", tool_call_id: llmCallId(c.key), content: toolResultContent(results.get(c.key)!) });
+      for (const c of answered) out.push({ role: "tool", tool_call_id: llmCallId(c.key), content: toolResultContent(results.get(c.key)!, urlToRef) });
       text = "";
       calls = [];
     };

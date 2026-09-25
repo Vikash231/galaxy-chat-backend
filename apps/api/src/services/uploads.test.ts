@@ -84,6 +84,7 @@ describe("attachments on send", () => {
     const { messageId } = await send(user.id, chat.id, [attachmentId]);
     const msg = await prisma.message.findUniqueOrThrow({ where: { id: messageId } });
     expect((msg.content as { type: string }[]).map((b) => b.type)).toEqual(["attachment", "text"]);
+    expect((msg.content as { ref?: string }[])[0]!.ref).toBe("img_1");
     expect((await prisma.attachment.findUniqueOrThrow({ where: { id: attachmentId } })).messageId).toBe(messageId);
   });
 

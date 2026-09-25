@@ -23,10 +23,12 @@ export const ContentBlock = z.discriminatedUnion("type", [
     creditsMicro: z.number().int().nonnegative().optional(),
     durationMs: z.number().int().nonnegative().optional(),
   }),
-  z.object({ type: z.literal("asset"), kind: AssetKind, url: z.string().url(), toolCallId: z.string() }),
+  // `ref` is the file's short, chat-unique name (img_3); models pass it to tools instead of copying URLs.
+  z.object({ type: z.literal("asset"), kind: AssetKind, url: z.string().url(), toolCallId: z.string(), ref: z.string().optional() }),
   z.object({
     type: z.literal("attachment"),
     attachmentId: z.string(),
+    ref: z.string().optional(),
     kind: AssetKind,
     url: z.string().url(),
     name: z.string(),

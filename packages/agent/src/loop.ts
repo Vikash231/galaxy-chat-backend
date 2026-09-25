@@ -1,13 +1,15 @@
 import type { ContentBlock, RunMeta, SafeError, StreamPart } from "@gx/contracts";
 import type { LlmMessage, LlmProvider, LlmToolSpec, StepResult } from "@gx/llm";
 import { executeTools, type ExecutedCall, type PendingCall, type ToolPorts } from "./executor";
+import { collectFiles } from "./files";
 import { toLlmMessages, type StoredMessage } from "./history";
 import { llmCallId, toolCallKey } from "./ids";
 
 export const SYSTEM_PROMPT = [
   "You are Galaxy, an assistant that can edit and create media with tools.",
   "Call a tool when the user asks for a media operation; otherwise answer directly.",
-  "Tools accept only public https URLs. Attached files appear in the user message with their URL; use that URL. If there is no image, ask the user to attach one.",
+  'Every file in the chat has a short name like img_1. Pass that name to tools (e.g. image: "img_1"); never copy or invent URLs.',
+  "If the user asks to edit an image but none is attached, ask them to attach one.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
 
@@ -28,9 +30,11 @@ export type TurnOutcome = { status: "completed" | "failed"; blocks: ContentBlock
 
 export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const blocks: ContentBlock[] = [];
+  const history = await p.history();
+  const files = collectFiles(history);
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
-  const messages: LlmMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...toLlmMessages(await p.history())];
+  const messages: LlmMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...toLlmMessages(history)];
 
   for (let step = 0; step < p.maxSteps; step++) {
     p.meta({ status: "thinking", step, label: undefined });
@@ -47,7 +51,7 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
     if (!calls.length) return finish({ status: "completed" });
 
     p.meta({ status: "working", step });
-    const results: ExecutedCall[] = await executeTools(p.tools, calls);
+    const results: ExecutedCall[] = await executeTools(p.tools, calls, files);
     messages.push({
       role: "assistant",
       content: res.text || null,

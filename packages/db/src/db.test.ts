@@ -8,6 +8,7 @@ import { listMessages } from "./messages";
 import { listChats, getOwnedChat } from "./chats";
 import { settleToolCharge, reserveProviderSpend, adjustProviderSpend } from "./credits";
 import { upsertInvocation } from "./tools";
+import { reserveFileRefs } from "./attachments";
 import { resetDb, seedUserWithChat } from "./testing";
 
 beforeEach(resetDb);
@@ -100,6 +101,25 @@ describe("cursor pagination", () => {
     await prisma.chat.create({ data: { userId: user.id, title: "newer" } });
     const page = await listChats(user.id, { limit: 10 });
     expect(page.items[0]!.title).toBe("newer");
+  });
+});
+
+describe("file names", () => {
+  it("never hands out the same name twice in a chat, even concurrently", async () => {
+    const { chat } = await seedUserWithChat();
+    const batches = await Promise.all(Array.from({ length: 10 }, () => reserveFileRefs(prisma, chat.id, ["image", "image", "video"])));
+    const names = batches.flat();
+    expect(names).toHaveLength(30);
+    expect(new Set(names.map((n) => n.split("_")[1])).size).toBe(30);
+    expect(names.filter((n) => n.startsWith("vid_"))).toHaveLength(10);
+  });
+
+  it("numbers each chat independently", async () => {
+    const a = await seedUserWithChat("u_a");
+    const b = await seedUserWithChat("u_b");
+    expect(await reserveFileRefs(prisma, a.chat.id, ["image"])).toEqual(["img_1"]);
+    expect(await reserveFileRefs(prisma, b.chat.id, ["image"])).toEqual(["img_1"]);
+    expect(await reserveFileRefs(prisma, a.chat.id, ["image"])).toEqual(["img_2"]);
   });
 });
 

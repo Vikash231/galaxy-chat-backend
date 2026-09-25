@@ -11,12 +11,12 @@ const argsOf = (r: ReturnType<typeof parse>) => {
 
 describe("crop_image input", () => {
   it("accepts a complete percent rectangle and maps it to Magica fields", () => {
-    const r = parse({ image_url: url, unit: "percent", x: 0, y: 0, width: 50, height: 100 });
+    const r = parse({ image: url, unit: "percent", x: 0, y: 0, width: 50, height: 100 });
     expect(cropImage.exec.toInput(argsOf(r))).toEqual({ image_url: url, x_percent: 0, y_percent: 0, width_percent: 50, height_percent: 100 });
   });
 
   it("centres a pixel crop when x and y are omitted", () => {
-    const r = parse({ image_url: url, unit: "pixels", width: 300, height: 200 });
+    const r = parse({ image: url, unit: "pixels", width: 300, height: 200 });
     expect(cropImage.exec.toInput(argsOf(r))).toEqual({ image_url: url, width_px: 300, height_px: 200 });
   });
 
@@ -26,18 +26,23 @@ describe("crop_image input", () => {
     [{ unit: "pixels", x: 10, width: 50, height: 50 }, "both x and y, or neither"],
     [{ unit: "pixels", width: 0, height: 50 }, "width"],
   ])("rejects an incomplete or invalid rectangle %#", (rect, message) => {
-    const r = parse({ image_url: url, ...rect });
+    const r = parse({ image: url, ...rect });
     expect(r.ok).toBe(false);
     expect((r as { message: string }).message).toContain(message);
   });
 
-  it("rejects non-https URLs and bad JSON", () => {
-    expect(parse({ image_url: "http://example.com/a.jpg", unit: "pixels", width: 1, height: 1 }).ok).toBe(false);
+  it("still accepts the older image_url field", () => {
+    expect(parse({ image_url: url, unit: "pixels", width: 10, height: 10 }).ok).toBe(true);
+  });
+
+  it("rejects non-https URLs, unresolved names and bad JSON", () => {
+    expect(parse({ image: "http://example.com/a.jpg", unit: "pixels", width: 1, height: 1 }).ok).toBe(false);
+    expect(parse({ image: "img_4", unit: "pixels", width: 1, height: 1 })).toEqual({ ok: false, message: "Unknown file img_4. No files are attached in this chat; ask the user to attach one." });
     expect(parseArgs(cropImage, "{not json")).toEqual({ ok: false, message: "Arguments were not valid JSON." });
   });
 
   it("accepts the documented crop.{x,y,width,height} alias", () => {
-    const r = parse({ image_url: url, unit: "percent", crop: { x: 0, y: 0, width: 50, height: 50 } });
+    const r = parse({ image: url, unit: "percent", crop: { x: 0, y: 0, width: 50, height: 50 } });
     expect(r.ok).toBe(true);
   });
 
@@ -49,7 +54,7 @@ describe("crop_image input", () => {
 
   it("publishes an LLM function spec generated from the schema", () => {
     const spec = toolSpecs().find((s) => s.function.name === "crop_image")!;
-    expect(spec.function.parameters).toMatchObject({ type: "object", required: expect.arrayContaining(["image_url", "unit", "width", "height"]) });
+    expect(spec.function.parameters).toMatchObject({ type: "object", required: expect.arrayContaining(["image", "unit", "width", "height"]) });
     expect(spec.function.parameters).not.toHaveProperty("$schema");
   });
 });

@@ -1,5 +1,6 @@
 import type { ContentBlock, SafeError, ToolStatus } from "@gx/contracts";
 import { getTool, parseArgs, type AnyTool } from "@gx/tools";
+import { withRefs } from "./files";
 
 export type Invocation = { id: string; status: ToolStatus; output: unknown; creditsMicro: bigint; durationMs?: number | null; error: SafeError | null };
 export type ToolOutcome = { status: "completed" | "failed" | "cancelled"; output?: unknown; creditsMicro: bigint; durationMs?: number; error?: SafeError };
@@ -10,6 +11,8 @@ export interface ToolPorts {
   upsert(i: { toolCallId: string; seq: number; name: string; input: unknown; estimateMicro: bigint }): Promise<Invocation>;
   dispatch(tool: AnyTool, toolInvocationId: string): Promise<ToolOutcome>;
   settle(toolInvocationId: string, creditsMicro: bigint): Promise<void>;
+  /** Reserve chat-unique names (img_4, …) for new result files. */
+  reserveFileRefs(kinds: ("image" | "video" | "audio")[]): Promise<string[]>;
   update(key: string, patch: { name: string; seq: number; status: ToolStatus; credits?: string; durationMs?: number; assetUrl?: string; error?: SafeError; label?: string }): void;
 }
 
@@ -29,11 +32,14 @@ const costFields = (c?: Pick<ToolOutcome, "creditsMicro" | "durationMs">) => ({
   ...(c?.durationMs != null && { durationMs: c.durationMs }),
 });
 
-async function executeOne(ports: ToolPorts, call: PendingCall): Promise<ExecutedCall> {
+/** Name → URL for every file the model may refer to; results from this turn are added as they complete. */
+export type FileMap = Map<string, string>;
+
+async function executeOne(ports: ToolPorts, call: PendingCall, files: FileMap): Promise<ExecutedCall> {
   const tool = getTool(call.name);
   if (!tool) return failure(call.key, { code: "unknown_tool", message: `There is no tool named "${call.name}".`, retryable: false });
 
-  const parsed = parseArgs(tool, call.argsJson);
+  const parsed = parseArgs(tool, call.argsJson, files);
   if (!parsed.ok) {
     ports.update(call.key, { name: tool.name, seq: call.seq, status: "failed", error: { code: "invalid_input", message: parsed.message, retryable: false } });
     return failure(call.key, { code: "invalid_input", message: parsed.message, retryable: false });
@@ -63,17 +69,19 @@ async function executeOne(ports: ToolPorts, call: PendingCall): Promise<Executed
   }
 
   const assets = tool.assets(outcome.output);
+  const refs = await ports.reserveFileRefs(assets.map((a) => a.kind));
+  assets.forEach((a, i) => files.set(refs[i]!, a.url));
   ports.update(call.key, { name: tool.name, seq: call.seq, status: "completed", credits: outcome.creditsMicro.toString(), durationMs: outcome.durationMs, assetUrl: assets[0]?.url });
   return {
     key: call.key,
     blocks: [
       { type: "tool_result", toolCallId: call.key, status: "completed", output: outcome.output, ...costFields(outcome) },
-      ...assets.map((a) => ({ type: "asset" as const, kind: a.kind, url: a.url, toolCallId: call.key })),
+      ...assets.map((a, i) => ({ type: "asset" as const, kind: a.kind, url: a.url, toolCallId: call.key, ref: refs[i] })),
     ],
-    llmContent: JSON.stringify(outcome.output),
+    llmContent: JSON.stringify(withRefs(outcome.output, new Map(assets.map((a, i) => [a.url, refs[i]!])))),
     creditsMicro: outcome.creditsMicro,
   };
 }
 
 /** Run independent calls in parallel; results come back in call order so rendering and replay are deterministic. */
-export const executeTools = (ports: ToolPorts, calls: PendingCall[]) => Promise.all(calls.map((c) => executeOne(ports, c)));
+export const executeTools = (ports: ToolPorts, calls: PendingCall[], files: FileMap = new Map()) => Promise.all(calls.map((c) => executeOne(ports, c, files)));

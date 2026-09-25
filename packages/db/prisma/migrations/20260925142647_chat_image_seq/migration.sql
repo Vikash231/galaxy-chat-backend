@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Chat" ADD COLUMN     "imageSeq" INTEGER NOT NULL DEFAULT 0;

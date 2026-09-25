@@ -49,14 +49,29 @@ export async function monthlyUploadBytes(): Promise<number> {
  * Link attachments to a message inside the send transaction.
  * Every id must belong to the user and not already be used by another message; order is preserved.
  */
-export async function claimAttachments(tx: Tx, userId: string, messageId: string, ids: string[]): Promise<ContentBlock[]> {
+export async function claimAttachments(tx: Tx, userId: string, chatId: string, messageId: string, ids: string[]): Promise<ContentBlock[]> {
   if (!ids.length) return [];
   const { count } = await tx.attachment.updateMany({ where: { id: { in: ids }, userId, messageId: null }, data: { messageId } });
   if (count !== new Set(ids).size) throw new AppError("upload_rejected", "One of the attached files is missing or already used. Attach it again.");
   const rows = await tx.attachment.findMany({ where: { id: { in: ids } } });
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return ids.map((id) => {
+  const refs = await reserveFileRefs(tx, chatId, ids.map((id) => byId.get(id)!.kind as FileKind));
+  return ids.map((id, i) => {
     const a = byId.get(id)!;
-    return { type: "attachment", attachmentId: a.id, kind: a.kind as "image" | "video" | "audio", url: a.url, name: a.name, mime: a.mime, width: a.width, height: a.height };
+    return { type: "attachment", attachmentId: a.id, ref: refs[i], kind: a.kind as FileKind, url: a.url, name: a.name, mime: a.mime, width: a.width, height: a.height };
   });
+}
+
+type FileKind = "image" | "video" | "audio";
+const PREFIX: Record<FileKind, string> = { image: "img", video: "vid", audio: "aud" };
+
+/**
+ * Hand out chat-unique file names (img_1, vid_2, …) from the chat's counter.
+ * The counter is a single atomic increment, so concurrent uploads and tool results never get the same name.
+ */
+export async function reserveFileRefs(db: Tx, chatId: string, kinds: FileKind[]): Promise<string[]> {
+  if (!kinds.length) return [];
+  const { imageSeq } = await db.chat.update({ where: { id: chatId }, data: { imageSeq: { increment: kinds.length } }, select: { imageSeq: true } });
+  const first = imageSeq - kinds.length + 1;
+  return kinds.map((k, i) => `${PREFIX[k]}_${first + i}`);
 }

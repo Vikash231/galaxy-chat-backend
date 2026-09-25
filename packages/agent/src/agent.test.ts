@@ -6,7 +6,7 @@ import type { ToolPorts, ToolOutcome } from "./executor";
 import { toLlmMessages } from "./history";
 
 const step = (p: Partial<StepResult>): StepResult => ({ text: "", thinking: "", toolCalls: [], model: "m:free", usage: { promptTokens: 1, completionTokens: 1 }, finishReason: "stop", ...p });
-const cropArgs = (x = 0) => JSON.stringify({ image_url: "https://e.com/a.jpg", unit: "percent", x, y: 0, width: 50, height: 100 });
+const cropArgs = (x = 0, image = "https://e.com/a.jpg") => JSON.stringify({ image, unit: "percent", x, y: 0, width: 50, height: 100 });
 
 function fakeLlm(steps: StepResult[]) {
   const seen: LlmMessage[][] = [];
@@ -23,7 +23,9 @@ function fakeLlm(steps: StepResult[]) {
 
 function fakeTools(opts: { balance?: bigint; outcome?: (id: string) => ToolOutcome } = {}) {
   let n = 0;
+  let fileSeq = 0;
   const ports: ToolPorts = {
+    reserveFileRefs: vi.fn(async (kinds) => kinds.map(() => `img_${++fileSeq}`)),
     balance: async () => opts.balance ?? 1_000_000n,
     upsert: vi.fn(async () => ({ id: `inv_${n++}`, status: "pending" as const, output: null, creditsMicro: 0n, error: null })),
     dispatch: vi.fn(async (_t, id) => opts.outcome?.(id) ?? { status: "completed" as const, output: { image_url: `https://cdn/${id}.png` }, creditsMicro: 5_000n }),
@@ -58,6 +60,7 @@ describe("agent loop", () => {
     expect(out.status).toBe("completed");
     expect(out.blocks.map((b) => b.type)).toEqual(["tool_use", "tool_result", "asset", "text", "usage"]);
     expect(out.blocks[1]).toMatchObject({ type: "tool_result", creditsMicro: 5000 });
+    expect(out.blocks[2]).toMatchObject({ type: "asset", ref: "img_1" });
     expect(out.blocks.at(-1)).toEqual({ type: "usage", creditsMicro: 5000, promptTokens: 2, completionTokens: 2, models: ["m:free"] });
     expect(tools.settle).toHaveBeenCalledWith("inv_0", 5_000n);
     const second = seen[1]!;
@@ -74,7 +77,7 @@ describe("agent loop", () => {
     const out = await runAgentTurn(ports(llm, tools));
     expect(tools.dispatch).not.toHaveBeenCalled();
     expect(out.blocks[1]).toMatchObject({ type: "tool_result", status: "failed", error: { code: "invalid_input" } });
-    expect((seen[1]!.at(-1) as { content: string }).content).toContain("image_url");
+    expect((seen[1]!.at(-1) as { content: string }).content).toContain("image:");
   });
 
   it("reports unknown tools back to the model", async () => {
@@ -135,16 +138,52 @@ describe("agent loop", () => {
   });
 });
 
-describe("history mapping", () => {
-  it("gives the model attached files as URLs before the user's text", () => {
-    const msgs = toLlmMessages([
-      { role: "user", content: [
-        { type: "attachment", attachmentId: "att_1", kind: "image", url: "https://files.example/u/cat.jpg", name: "cat.jpg", mime: "image/jpeg", width: 800, height: 600 },
-        { type: "text", text: "crop the left half" },
-      ] },
-    ]);
-    expect(msgs).toEqual([{ role: "user", content: 'Attached image "cat.jpg" (800x600): https://files.example/u/cat.jpg\n\ncrop the left half' }]);
+describe("file names", () => {
+  const attached = [{ role: "user" as const, content: [
+    { type: "attachment" as const, attachmentId: "a1", ref: "img_1", kind: "image" as const, url: "https://files.example/u/cat-long-random-9f8e7d6c5b4a.jpg", name: "cat.jpg", mime: "image/jpeg", width: 400, height: 267 },
+    { type: "text" as const, text: "crop the left half" },
+  ] }];
+
+  it("resolves a file name to its real URL before the tool runs", async () => {
+    const { llm } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs(0, "img_1") }] }), step({ text: "done" })]);
+    const tools = fakeTools();
+    await runAgentTurn(ports(llm, tools, { history: async () => attached }));
+    expect(tools.upsert).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ image: "https://files.example/u/cat-long-random-9f8e7d6c5b4a.jpg" }) }));
   });
+
+  it("rejects an unknown name and tells the model which files exist", async () => {
+    const { llm, seen } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs(0, "img_9") }] }), step({ text: "Which image?" })]);
+    const tools = fakeTools();
+    await runAgentTurn(ports(llm, tools, { history: async () => attached }));
+    expect(tools.dispatch).not.toHaveBeenCalled();
+    expect((seen[1]!.at(-1) as { content: string }).content).toContain("Unknown file img_9. Files in this chat: img_1.");
+  });
+
+  it("gives every result its own name and shows the model names, never URLs", async () => {
+    const calls = [0, 1, 2].map((i) => ({ id: `c${i}`, name: "crop_image", argsJson: cropArgs(i, "img_1") }));
+    const { llm, seen } = fakeLlm([step({ toolCalls: calls }), step({ text: "done" })]);
+    const out = await runAgentTurn(ports(llm, fakeTools(), { history: async () => attached }));
+    const refs = out.blocks.flatMap((b) => (b.type === "asset" ? [b.ref] : []));
+    expect(new Set(refs).size).toBe(3);
+    const toolMessages = seen[1]!.filter((m) => m.role === "tool").map((m) => (m as { content: string }).content).join(" ");
+    expect(toolMessages).toMatch(/img_\d/);
+    expect(toolMessages).not.toContain("https://");
+  });
+
+  it("the model sees attachments by name only", () => {
+    const [msg] = toLlmMessages(attached);
+    expect(msg).toEqual({ role: "user", content: 'Attached image img_1: "cat.jpg" (400x267)\n\ncrop the left half' });
+  });
+
+  it("older files without a saved name get a stable fallback name", () => {
+    const old = [{ role: "user" as const, content: [{ type: "attachment" as const, attachmentId: "a0", kind: "image" as const, url: "https://x/y.png", name: "y.png", mime: "image/png", width: null, height: null }] }];
+    const a = (toLlmMessages(old)[0] as { content: string }).content;
+    expect(a).toMatch(/^Attached image img_[a-f0-9]{6}: "y.png"$/);
+    expect(toLlmMessages(old)).toEqual(toLlmMessages(old));
+  });
+});
+
+describe("history mapping", () => {
 
   it("drops tool calls that never got a result so providers do not reject the history", () => {
     const msgs = toLlmMessages([

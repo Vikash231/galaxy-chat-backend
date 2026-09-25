@@ -42,7 +42,7 @@ async function invocation(over: Record<string, unknown> = {}) {
   const { runId } = await admitTurn({ userId: user.id, chatId: chat.id, clientMessageId: randomUUID(), text: "crop" });
   const inv = await upsertInvocation({
     runId, toolCallId: "0:c1", seq: 0, name: "crop_image", estimateMicro: 5_000n,
-    input: { image_url: "https://e.com/a.jpg", unit: "percent", x: 0, y: 0, width: 50, height: 100 },
+    input: { image: "https://e.com/a.jpg", unit: "percent", x: 0, y: 0, width: 50, height: 100 },
   });
   if (Object.keys(over).length) await prisma.toolInvocation.update({ where: { id: inv.id }, data: over });
   return inv.id;

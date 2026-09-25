@@ -9,7 +9,9 @@ import {
   isTerminalRun,
   loadHistory,
   loadRun,
+  prisma,
   readError,
+  reserveFileRefs,
   recordStep,
   settleToolCharge,
   startRun,
@@ -103,8 +105,9 @@ export const agentTurn = task({
   },
 });
 
-function toolPorts(run: { id: string; userId: string }, meta: MetaWriter): ToolPorts {
+function toolPorts(run: { id: string; userId: string; chatId: string }, meta: MetaWriter): ToolPorts {
   return {
+    reserveFileRefs: (kinds) => reserveFileRefs(prisma, run.chatId, kinds),
     balance: () => getBalance(run.userId),
     upsert: async (i) => {
       const row = await upsertInvocation({ runId: run.id, ...i });
