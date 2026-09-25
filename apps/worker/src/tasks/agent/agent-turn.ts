@@ -46,7 +46,11 @@ export const agentTurn = task({
 
     const message = await upsertAssistantMessage(run.chatId, runId);
     const log = withContext({ runId, chatId: run.chatId, userId: run.userId, messageId: message.id, triggerRunId: ctx.run.id });
+    // Create the token stream before any metadata is published: clients subscribe once metadata appears,
+    // and subscribing to a stream that doesn't exist yet fails with a 400.
+    await assistantStream.append({ t: "text", step: 0, d: "" });
     const meta = createMetaWriter();
+    meta.set({ status: "thinking", step: 0 });
     const stream = createCoalescer((p) => assistantStream.append(p), (e) => log.warn({ err: e }, "stream.append_failed"));
     let saved: ContentBlock[] = [];
     log.info("run.started");
