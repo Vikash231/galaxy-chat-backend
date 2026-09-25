@@ -12,12 +12,18 @@ const shared = {
 
 export const ApiEnv = z.object({
   ...shared,
-  CLERK_JWT_KEY: z.string().min(1),
+  NODE_ENV: z.string().default("development"),
+  // Clerk's JWKS URL in production; CLERK_JWT_KEY (PEM) is for local dev tokens (scripts/dev-token.mjs).
+  CLERK_JWKS_URL: z.string().url().optional(),
+  CLERK_JWT_KEY: z.string().min(1).optional(),
   FRONTEND_ORIGIN: z.string().url(),
   // Optional so the API runs before Trigger.dev is set up; sending a message then returns 503 dispatch_failed.
   TRIGGER_SECRET_KEY: z.string().optional(),
   SEND_RATE_PER_MIN: int(10),
-});
+})
+  .refine((e) => e.CLERK_JWKS_URL || e.CLERK_JWT_KEY, { message: "set CLERK_JWKS_URL (or CLERK_JWT_KEY for local dev)" })
+  // A dev signing key must never be trusted in production.
+  .refine((e) => e.NODE_ENV !== "production" || !e.CLERK_JWT_KEY, { message: "CLERK_JWT_KEY is dev-only; use CLERK_JWKS_URL in production" });
 
 export const WorkerEnv = z.object({
   ...shared,

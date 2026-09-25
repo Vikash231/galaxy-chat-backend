@@ -1,5 +1,7 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import { SignJWT, exportSPKI, generateKeyPair } from "jose";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SignJWT, exportJWK, exportSPKI, generateKeyPair } from "jose";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
 import { verifySessionToken } from "./verify";
 
 let privateKey: CryptoKey;
@@ -32,5 +34,35 @@ describe("verifySessionToken", () => {
     ["not a bearer token", async () => "Basic abc"],
   ])("rejects %s with 401", async (_name, header) => {
     await expect(verify(await header())).rejects.toMatchObject({ code: "unauthenticated" });
+  });
+});
+
+describe("verifySessionToken with Clerk's JWKS URL", () => {
+  const JWKS_URL = "https://clerk.example.dev/.well-known/jwks.json";
+  const server = setupServer();
+  let jwksKey: CryptoKey;
+
+  beforeAll(async () => {
+    const kp = await generateKeyPair("RS256", { extractable: true });
+    jwksKey = kp.privateKey;
+    const jwk = { ...(await exportJWK(kp.publicKey)), kid: "ins_1", alg: "RS256", use: "sig" };
+    server.use(http.get(JWKS_URL, () => HttpResponse.json({ keys: [jwk] })));
+    server.listen({ onUnhandledRequest: "error" });
+  });
+  afterAll(() => server.close());
+
+  const signed = (key: CryptoKey) =>
+    new SignJWT({ azp: ORIGIN, sid: "sess_2" }).setProtectedHeader({ alg: "RS256", kid: "ins_1" }).setSubject("user_2").setIssuedAt().setExpirationTime("60s").sign(key);
+
+  it("accepts a token signed by a key in the JWKS", async () => {
+    await expect(verifySessionToken(`Bearer ${await signed(jwksKey)}`, { jwksUrl: JWKS_URL, authorizedParties: [ORIGIN] })).resolves.toMatchObject({ clerkUserId: "user_2" });
+  });
+
+  it("still accepts local dev tokens when a dev key is also configured", async () => {
+    await expect(verifySessionToken(`Bearer ${await token()}`, { jwksUrl: JWKS_URL, jwtKey, authorizedParties: [ORIGIN] })).resolves.toMatchObject({ clerkUserId: "user_1" });
+  });
+
+  it("rejects a token signed by an unknown key", async () => {
+    await expect(verifySessionToken(`Bearer ${await signed(otherKey)}`, { jwksUrl: JWKS_URL, authorizedParties: [ORIGIN] })).rejects.toMatchObject({ code: "unauthenticated" });
   });
 });

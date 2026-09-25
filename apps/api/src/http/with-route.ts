@@ -37,6 +37,7 @@ export function withRoute<P extends Schema | undefined = undefined, Q extends Sc
       if (spec.auth !== false) {
         const env = apiEnv();
         const principal = await verifySessionToken(req.headers.get("authorization"), {
+          jwksUrl: env.CLERK_JWKS_URL,
           jwtKey: env.CLERK_JWT_KEY,
           authorizedParties: [env.FRONTEND_ORIGIN],
         });
