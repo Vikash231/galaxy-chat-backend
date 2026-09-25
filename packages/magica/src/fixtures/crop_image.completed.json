@@ -1,0 +1,14 @@
+{
+  "id": "recorded",
+  "nodeType": "crop_image",
+  "status": "COMPLETED",
+  "output": {
+    "width": 400,
+    "height": 533,
+    "image_url": "https://g.tlcdn.com/gen/5a2b6176a4a7499b98981784381794a5.png",
+    "creditUsed": 5000
+  },
+  "error": null,
+  "userMessage": null,
+  "creditUsed": 5000
+}
