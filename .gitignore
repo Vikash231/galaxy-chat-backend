@@ -10,3 +10,4 @@ coverage
 .DS_Store
 .dev/
 next-env.d.ts
+.next-dev/

@@ -11,10 +11,11 @@
     "allowJs": true
   },
   "include": [
+    ".next/types/**/*.ts",
+    "middleware.ts",
     "next-env.d.ts",
     "src/**/*.ts",
-    "middleware.ts",
-    ".next/types/**/*.ts"
+    ".next-dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
