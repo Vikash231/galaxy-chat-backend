@@ -1,0 +1,166 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+enum MessageStatus {
+  streaming
+  success
+  failed
+  cancelled
+}
+
+enum RunStatus {
+  queued
+  running
+  waiting
+  completed
+  failed
+  cancelled
+}
+
+enum ToolStatus {
+  pending
+  dispatching
+  running
+  completed
+  failed
+  cancelled
+}
+
+model User {
+  id           String         @id @default(cuid())
+  clerkId      String         @unique
+  balanceMicro BigInt         @default(0) // cache of SUM(ledger), changed only in the same tx as a ledger row
+  createdAt    DateTime       @default(now())
+  chats        Chat[]
+  runs         AgentRun[]
+  ledger       CreditLedger[]
+}
+
+model Chat {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String     @default("New chat")
+  pinned    Boolean    @default(false)
+  deletedAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  messages  Message[]
+  runs      AgentRun[]
+
+  @@index([userId, updatedAt(sort: Desc), id(sort: Desc)])
+}
+
+model Message {
+  id              String        @id @default(cuid())
+  chatId          String
+  chat            Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role            MessageRole
+  status          MessageStatus @default(success)
+  content         Json // ContentBlock[], validated by Zod on write and read
+  clientMessageId String?
+  runId           String?       @unique
+  run             AgentRun?     @relation("RunAssistantMessage", fields: [runId], references: [id], onDelete: SetNull)
+  checkpointStep  Int           @default(-1) // last LLM step persisted; live stream parts render only after it
+  errorCode       String?
+  errorMessage    String?
+  errorRetryable  Boolean?
+  createdAt       DateTime      @default(now())
+
+  @@unique([chatId, clientMessageId])
+  @@index([chatId, createdAt(sort: Desc), id(sort: Desc)])
+}
+
+model AgentRun {
+  id               String           @id @default(cuid())
+  chatId           String
+  chat             Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userMessageId    String           @unique
+  status           RunStatus        @default(queued)
+  triggerRunId     String?          @unique
+  steps            Int              @default(0)
+  routedModels     String[]
+  promptTokens     Int              @default(0)
+  completionTokens Int              @default(0)
+  errorCode        String?
+  errorMessage     String?
+  errorRetryable   Boolean?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  finishedAt       DateTime?
+  assistantMessage Message?         @relation("RunAssistantMessage")
+  tools            ToolInvocation[]
+  ledger           CreditLedger[]
+
+  @@index([chatId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ToolInvocation {
+  id             String         @id @default(cuid())
+  runId          String
+  run            AgentRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  toolCallId     String
+  seq            Int
+  name           String
+  status         ToolStatus     @default(pending)
+  input          Json // sanitized, Zod-validated
+  output         Json?
+  magicaRunId    String?        @unique
+  estimateMicro  BigInt         @default(0)
+  creditsMicro   BigInt         @default(0)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  durationMs     Int?
+  errorCode      String?
+  errorMessage   String?
+  errorRetryable Boolean?
+  createdAt      DateTime       @default(now())
+  ledger         CreditLedger[]
+
+  @@unique([runId, toolCallId])
+}
+
+model CreditLedger {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deltaMicro       BigInt
+  reason           String // grant | tool_charge | refund
+  idempotencyKey   String          @unique // grant:<userId> | tool:<toolInvocationId>
+  runId            String?
+  run              AgentRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
+  toolInvocationId String?
+  toolInvocation   ToolInvocation? @relation(fields: [toolInvocationId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+
+  @@index([userId, createdAt])
+  @@index([runId])
+  @@index([toolInvocationId])
+}
+
+// One row per provider per day; the spend cap is a single-row conditional update.
+model ProviderSpendDaily {
+  provider   String
+  day        DateTime @db.Date
+  spentMicro BigInt   @default(0)
+
+  @@id([provider, day])
+}
