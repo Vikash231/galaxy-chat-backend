@@ -1,0 +1,5 @@
+{
+  "name": "@gx/migrator",
+  "private": true,
+  "description": "Deployable wrapper: runs `prisma migrate deploy` for @gx/db. See Dockerfile."
+}

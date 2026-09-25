@@ -1,0 +1,25 @@
+{
+  "name": "@gx/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "@gx/auth": "workspace:*",
+    "@gx/config": "workspace:*",
+    "@gx/contracts": "workspace:*",
+    "@gx/db": "workspace:*",
+    "@gx/observability": "workspace:*",
+    "@trigger.dev/sdk": "4.6.4",
+    "next": "15.5.26",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0"
+  }
+}
