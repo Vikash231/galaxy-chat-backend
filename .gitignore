@@ -11,3 +11,4 @@ coverage
 .dev/
 next-env.d.ts
 .next-dev/
+.vercel

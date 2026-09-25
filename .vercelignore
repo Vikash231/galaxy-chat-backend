@@ -1,0 +1,12 @@
+# Never upload secrets or local state to Vercel
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+.dev/
+**/node_modules
+**/.next
+**/.next-dev
+**/.trigger
+docker/
