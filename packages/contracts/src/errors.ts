@@ -8,6 +8,9 @@ export const ErrorCode = z.enum([
   "run_not_dispatched",
   "validation_failed",
   "rate_limited",
+  "upload_not_ready",
+  "upload_rejected",
+  "upload_quota",
   "dispatch_failed",
   "internal",
 ]);
@@ -21,6 +24,9 @@ export const httpStatus: Record<ErrorCode, number> = {
   run_not_dispatched: 409,
   validation_failed: 422,
   rate_limited: 429,
+  upload_not_ready: 409,
+  upload_rejected: 422,
+  upload_quota: 429,
   dispatch_failed: 503,
   internal: 500,
 };

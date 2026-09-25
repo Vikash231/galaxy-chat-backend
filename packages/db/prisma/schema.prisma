@@ -49,6 +49,7 @@ model User {
   chats        Chat[]
   runs         AgentRun[]
   ledger       CreditLedger[]
+  attachments  Attachment[]
 }
 
 model Chat {
@@ -81,6 +82,7 @@ model Message {
   errorMessage    String?
   errorRetryable  Boolean?
   createdAt       DateTime      @default(now())
+  attachments     Attachment[]
 
   @@unique([chatId, clientMessageId])
   @@index([chatId, createdAt(sort: Desc), id(sort: Desc)])
@@ -154,6 +156,31 @@ model CreditLedger {
   @@index([userId, createdAt])
   @@index([runId])
   @@index([toolInvocationId])
+}
+
+// One uploaded file. Created when its Transloadit Assembly completes; linked to a message when sent.
+model Attachment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId         String?
+  message           Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  assemblyId        String
+  transloaditFileId String
+  kind              String // image | video | audio
+  name              String
+  mime              String
+  sizeBytes         BigInt
+  width             Int?
+  height            Int?
+  url               String
+  persistent        Boolean // true = our R2 bucket; false = Transloadit temporary result
+  createdAt         DateTime @default(now())
+
+  @@unique([assemblyId, transloaditFileId])
+  @@index([userId, createdAt])
+  @@index([messageId])
+  @@index([createdAt])
 }
 
 // One row per provider per day; the spend cap is a single-row conditional update.

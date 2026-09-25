@@ -49,9 +49,11 @@ export const MessageView = z.object({
 export type MessageView = z.infer<typeof MessageView>;
 
 export const MAX_MESSAGE_CHARS = 8000;
+export const MAX_ATTACHMENTS = 10;
 export const SendMessageBody = z.object({
   clientMessageId: z.string().uuid(),
   text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
+  attachmentIds: z.array(id).max(MAX_ATTACHMENTS).default([]),
 });
 export type SendMessageBody = z.infer<typeof SendMessageBody>;
 
@@ -91,3 +93,24 @@ export type RunView = z.infer<typeof RunView>;
 
 export const CancelResponse = z.object({ runId: id, status: z.union([RunStatus, z.literal("stopping")]) });
 export const HealthResponse = z.object({ ok: z.boolean(), db: z.enum(["up", "down"]) });
+
+// ---- uploads (Transloadit) ----
+export const UPLOAD_MIME_PREFIXES = ["image/", "video/", "audio/"] as const;
+export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // Transloadit Community plan: 0.5 GB per file
+
+/** params must be sent to Transloadit byte-for-byte as signed, so it travels as a string. */
+export const SignUploadResponse = z.object({ params: z.string(), signature: z.string(), expiresAt: iso });
+export const CompleteUploadBody = z.object({ assemblyId: z.string().regex(/^[a-f0-9]{32}$/) });
+export const AttachmentView = z.object({
+  id,
+  kind: z.enum(["image", "video", "audio"]),
+  name: z.string(),
+  mime: z.string(),
+  sizeBytes: z.number().int(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  url: z.string().url(),
+  persistent: z.boolean(),
+});
+export type AttachmentView = z.infer<typeof AttachmentView>;
+export const CompleteUploadResponse = z.object({ attachments: z.array(AttachmentView) });

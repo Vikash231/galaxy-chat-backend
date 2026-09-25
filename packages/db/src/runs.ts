@@ -1,13 +1,14 @@
-import type { RunStatus } from "@prisma/client";
+import type { Prisma, RunStatus } from "@prisma/client";
 import { AppError, ACTIVE_RUN_STATUSES, type RunView, type SafeError } from "@gx/contracts";
 import { prisma, isUniqueViolation } from "./client";
 import { errorCols, readError } from "./errors";
 import { toMessageView } from "./messages";
+import { claimAttachments } from "./attachments";
 
 const TERMINAL: RunStatus[] = ["completed", "failed", "cancelled"];
 export const isTerminalRun = (s: RunStatus) => TERMINAL.includes(s);
 
-export type AdmitInput = { userId: string; chatId: string; clientMessageId: string; text: string };
+export type AdmitInput = { userId: string; chatId: string; clientMessageId: string; text: string; attachmentIds?: string[] };
 export type Admitted = { runId: string; messageId: string; triggerRunId: string | null; replay: boolean };
 
 /**
@@ -18,13 +19,10 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
   try {
     return await prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
-        data: {
-          chatId: input.chatId,
-          role: "user",
-          clientMessageId: input.clientMessageId,
-          content: [{ type: "text", text: input.text }],
-        },
+        data: { chatId: input.chatId, role: "user", clientMessageId: input.clientMessageId, content: [] },
       });
+      const attached = await claimAttachments(tx, input.userId, message.id, input.attachmentIds ?? []);
+      await tx.message.update({ where: { id: message.id }, data: { content: [...attached, { type: "text", text: input.text }] as Prisma.InputJsonValue } });
       const run = await tx.agentRun.create({
         data: { chatId: input.chatId, userId: input.userId, userMessageId: message.id },
       });

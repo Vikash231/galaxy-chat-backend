@@ -14,7 +14,7 @@ export async function sendTurn(user: UserRow, chatId: string, body: SendMessageB
     throw new AppError("rate_limited", "You're sending messages too quickly. Wait a moment and try again.");
   if (user.balanceMicro < env.MIN_ADMISSION_MICRO) throw new AppError("insufficient_credits", "You're out of credits.");
 
-  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text });
+  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text, attachmentIds: body.attachmentIds });
   let triggerRunId = admitted.triggerRunId;
 
   if (!triggerRunId) {

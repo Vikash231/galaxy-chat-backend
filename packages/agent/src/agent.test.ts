@@ -120,6 +120,16 @@ describe("agent loop", () => {
 });
 
 describe("history mapping", () => {
+  it("gives the model attached files as URLs before the user's text", () => {
+    const msgs = toLlmMessages([
+      { role: "user", content: [
+        { type: "attachment", attachmentId: "att_1", kind: "image", url: "https://files.example/u/cat.jpg", name: "cat.jpg", mime: "image/jpeg", width: 800, height: 600 },
+        { type: "text", text: "crop the left half" },
+      ] },
+    ]);
+    expect(msgs).toEqual([{ role: "user", content: 'Attached image "cat.jpg" (800x600): https://files.example/u/cat.jpg\n\ncrop the left half' }]);
+  });
+
   it("drops tool calls that never got a result so providers do not reject the history", () => {
     const msgs = toLlmMessages([
       { role: "user", content: [{ type: "text", text: "crop" }] },

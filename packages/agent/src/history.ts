@@ -7,6 +7,12 @@ export type StoredMessage = { role: "user" | "assistant" | "system" | "tool"; co
 const textOf = (blocks: ContentBlock[]) =>
   blocks.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
 
+/** Uploaded files reach the model as URLs it can pass straight to a tool. */
+const attachmentLines = (blocks: ContentBlock[]) =>
+  blocks
+    .flatMap((b) => (b.type === "attachment" ? [`Attached ${b.kind} "${b.name}"${b.width && b.height ? ` (${b.width}x${b.height})` : ""}: ${b.url}`] : []))
+    .join("\n");
+
 export const toolResultContent = (b: Extract<ContentBlock, { type: "tool_result" }>) =>
   JSON.stringify(b.status === "completed" ? b.output ?? {} : { error: b.error?.message ?? b.status });
 
@@ -18,7 +24,7 @@ export function toLlmMessages(history: StoredMessage[]): LlmMessage[] {
   const out: LlmMessage[] = [];
   for (const m of history) {
     if (m.role === "user") {
-      const text = textOf(m.content);
+      const text = [attachmentLines(m.content), textOf(m.content)].filter(Boolean).join("\n\n");
       if (text) out.push({ role: "user", content: text });
       continue;
     }

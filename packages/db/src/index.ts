@@ -7,3 +7,4 @@ export * from "./messages";
 export * from "./runs";
 export * from "./tools";
 export * from "./credits";
+export * from "./attachments";

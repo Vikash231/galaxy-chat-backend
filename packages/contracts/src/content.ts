@@ -22,6 +22,16 @@ export const ContentBlock = z.discriminatedUnion("type", [
     error: SafeError.optional(),
   }),
   z.object({ type: z.literal("asset"), kind: AssetKind, url: z.string().url(), toolCallId: z.string() }),
+  z.object({
+    type: z.literal("attachment"),
+    attachmentId: z.string(),
+    kind: AssetKind,
+    url: z.string().url(),
+    name: z.string(),
+    mime: z.string(),
+    width: z.number().int().nullable(),
+    height: z.number().int().nullable(),
+  }),
   z.object({ type: z.literal("error"), error: SafeError }),
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;

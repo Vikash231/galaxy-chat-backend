@@ -20,6 +20,12 @@ export const ApiEnv = z.object({
   // Optional so the API runs before Trigger.dev is set up; sending a message then returns 503 dispatch_failed.
   TRIGGER_SECRET_KEY: z.string().optional(),
   SEND_RATE_PER_MIN: int(10),
+  TRANSLOADIT_AUTH_KEY: z.string().min(1).optional(),
+  TRANSLOADIT_AUTH_SECRET: z.string().min(1).optional(),
+  // Name of the R2 Template Credentials in the Transloadit console. Unset = temporary Transloadit URLs (dev only).
+  TRANSLOADIT_R2_CREDENTIALS: z.string().min(1).optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
+  UPLOAD_MONTHLY_QUOTA_BYTES: z.coerce.number().int().positive().default(5 * 1024 ** 3), // Community plan: 5 GB/month
 })
   .refine((e) => e.CLERK_JWKS_URL || e.CLERK_JWT_KEY, { message: "set CLERK_JWKS_URL (or CLERK_JWT_KEY for local dev)" })
   // A dev signing key must never be trusted in production.

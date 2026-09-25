@@ -15,7 +15,7 @@ import { sendTurn } from "./turns";
 beforeEach(async () => (await resetDb(), vi.clearAllMocks()));
 afterAll(() => prisma.$disconnect());
 
-const body = (clientMessageId = randomUUID()) => ({ clientMessageId, text: "crop the left half" });
+const body = (clientMessageId = randomUUID(), attachmentIds: string[] = []) => ({ clientMessageId, text: "crop the left half", attachmentIds });
 
 describe("sendTurn", () => {
   it("admits, dispatches once, and returns realtime access; a replay returns the same run", async () => {
