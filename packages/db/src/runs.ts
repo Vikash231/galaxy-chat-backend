@@ -131,3 +131,18 @@ export async function startRun(runId: string, triggerRunId: string): Promise<boo
   });
   return count === 1;
 }
+
+/**
+ * Mark a run and its reply stopped, keeping the reply's saved content. Run by the API because a worker
+ * suspended on a tool is cancelled without running any of its code.
+ */
+export async function cancelRun(runId: string, error: SafeError): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.agentRun.updateMany({
+      where: { id: runId, status: { notIn: TERMINAL } },
+      data: { status: "cancelled", finishedAt: new Date(), ...errorCols(error) },
+    });
+    await tx.message.updateMany({ where: { runId, status: "streaming" }, data: { status: "cancelled", ...errorCols(error) } });
+    return count === 1;
+  });
+}

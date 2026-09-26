@@ -1,6 +1,15 @@
 import { prisma, isUniqueViolation } from "./client";
 
 /** Charge the user for one tool call exactly once; returns false if it was already charged. */
+/** Charge the run's user the cost stored on a finished invocation. Safe to repeat: the charge happens once. */
+export async function settleInvocationCharge(toolInvocationId: string) {
+  const inv = await prisma.toolInvocation.findUniqueOrThrow({
+    where: { id: toolInvocationId },
+    select: { runId: true, creditsMicro: true, run: { select: { userId: true } } },
+  });
+  return settleToolCharge({ userId: inv.run.userId, runId: inv.runId, toolInvocationId, creditsMicro: inv.creditsMicro });
+}
+
 export async function settleToolCharge(p: { userId: string; runId: string; toolInvocationId: string; creditsMicro: bigint }) {
   if (p.creditsMicro <= 0n) return false;
   try {

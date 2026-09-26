@@ -25,6 +25,10 @@ export const upsertInvocation = (i: InvocationInput) =>
 
 export const getInvocation = (id: string) => prisma.toolInvocation.findUniqueOrThrow({ where: { id } });
 
+/** Provider calls of a run that Magica accepted but that have not finished yet. */
+export const inFlightProviderCalls = (runId: string) =>
+  prisma.toolInvocation.findMany({ where: { runId, status: { in: ["dispatching", "running"] }, magicaRunId: { not: null } }, select: { id: true } });
+
 /** Claim the right to call the provider; false means another attempt already did. */
 export async function markDispatching(id: string): Promise<boolean> {
   const { count } = await prisma.toolInvocation.updateMany({

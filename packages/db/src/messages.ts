@@ -77,3 +77,17 @@ export const finalizeMessage = (
     where: { id, status: "streaming" },
     data: { status, content: content as Prisma.InputJsonValue, ...errorCols(error) },
   });
+
+/**
+ * Save the content of a stopped reply. Unlike finalizeMessage it may overwrite a reply the API already
+ * marked cancelled: the worker's copy holds everything saved so far plus the text streamed since.
+ */
+export const saveCancelledMessage = (id: string, content: ContentBlock[], error: SafeError) =>
+  prisma.message.updateMany({
+    where: { id, status: { in: ["streaming", "cancelled"] } },
+    data: { status: "cancelled", content: content as Prisma.InputJsonValue, ...errorCols(error) },
+  });
+
+/** Mark a reply that was still streaming as failed, keeping whatever it saved. */
+export const failStreamingReply = (runId: string, error: SafeError) =>
+  prisma.message.updateMany({ where: { runId, status: "streaming" }, data: { status: "failed", ...errorCols(error) } });

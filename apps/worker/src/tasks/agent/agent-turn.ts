@@ -5,13 +5,17 @@ import { AGENT_TURN_TASK, type ContentBlock, type SafeError } from "@gx/contract
 import {
   checkpointMessage,
   finalizeMessage,
+  finishInvocation,
   getBalance,
   isTerminalRun,
   loadHistory,
   loadRun,
+  markDispatching,
   prisma,
   readError,
   reserveFileRefs,
+  recordRunSkill,
+  saveCancelledMessage,
   recordStep,
   settleToolCharge,
   startRun,
@@ -20,12 +24,12 @@ import {
   upsertInvocation,
 } from "@gx/db";
 import { LlmError } from "@gx/llm";
-import { withContext } from "@gx/observability";
-import { toolSpecs } from "@gx/tools";
+import { withContext, type Logger } from "@gx/observability";
+import { skillIndex, toolSpecs, ToolRunError, type AnyTool, type LocalExec } from "@gx/tools";
 import { createCoalescer } from "../../adapters/stream-coalescer";
 import { createMetaWriter, type MetaWriter } from "../../adapters/run-meta";
 import { agentTurns } from "../../queues";
-import { getLlm } from "../../services";
+import { getLlm, getSkills } from "../../services";
 import { assistantStream } from "../../streams";
 import { magicaRun } from "../tools/magica-run";
 
@@ -58,18 +62,21 @@ export const agentTurn = task({
     log.info("run.started");
 
     try {
+      const skills = getSkills(); // also installs the skill tools, so it runs before toolSpecs()
       const outcome = await runAgentTurn({
         llm: getLlm(),
         toolSpecs: toolSpecs(),
-        tools: toolPorts(run, meta),
+        skills: skillIndex(skills),
+        tools: toolPorts(run, meta, log),
         maxSteps: env.AGENT_MAX_STEPS,
         signal,
         history: () => loadHistory(run.chatId, env.AGENT_HISTORY_LIMIT),
         emit: (p) => stream.push(p),
         meta: (patch) => meta.set(patch),
         checkpoint: async (blocks, step, llm) => {
-          await stream.flush();
+          // Set first: after a Stop the stream flush can throw, and the catch below saves `saved`.
           saved = [...blocks];
+          await stream.flush();
           await checkpointMessage(message.id, saved, step);
           if (llm) {
             await recordStep(runId, step, llm.model, llm.usage.promptTokens, llm.usage.completionTokens);
@@ -89,7 +96,9 @@ export const agentTurn = task({
       const error = cancelled ? CANCELLED : e instanceof LlmError ? e.toSafe() : INTERNAL;
       await stream.flush().catch(() => {});
       // Everything checkpointed so far stays visible; the error explains why the reply stopped.
-      await finalizeMessage(message.id, cancelled ? "cancelled" : "failed", saved, error);
+      // A stop is usually already recorded by the API; this adds the text streamed before it landed.
+      if (cancelled) await saveCancelledMessage(message.id, saved, error);
+      else await finalizeMessage(message.id, "failed", saved, error);
       await transitionRun(runId, cancelled ? "cancelled" : "failed", { error });
       meta.set({ status: cancelled ? "cancelled" : "failed", error, label: undefined });
       await meta.flush().catch(() => {});
@@ -98,6 +107,11 @@ export const agentTurn = task({
       throw new AbortTaskRunError(error.message);
     }
   },
+  // A stop while the model streams: give run() up to 30 s to save the partial reply (Trigger.dev's limit).
+  // A stop while suspended on a tool never reaches here; the API's cancel route covers that case.
+  onCancel: async ({ runPromise }) => {
+    await runPromise.catch(() => {});
+  },
   // Covers crashes outside the try block (e.g. process killed): never leave a run stuck as active.
   onFailure: async ({ payload }) => {
     const run = await loadRun(payload.runId);
@@ -105,7 +119,7 @@ export const agentTurn = task({
   },
 });
 
-function toolPorts(run: { id: string; userId: string; chatId: string }, meta: MetaWriter): ToolPorts {
+function toolPorts(run: { id: string; userId: string; chatId: string }, meta: MetaWriter, log: Logger): ToolPorts {
   return {
     reserveFileRefs: (kinds) => reserveFileRefs(prisma, run.chatId, kinds),
     balance: () => getBalance(run.userId),
@@ -118,6 +132,11 @@ function toolPorts(run: { id: string; userId: string; chatId: string }, meta: Me
       if (!res.ok) return { status: "failed", creditsMicro: 0n, error: { code: "tool_task_failed", message: "The tool could not run.", retryable: true } };
       return { ...res.output, creditsMicro: BigInt(res.output.creditsMicro) };
     },
+    runLocal: async (tool, args, toolInvocationId) => {
+      await markDispatching(toolInvocationId); // stamps startedAt so the duration is recorded
+      const inv = await finishInvocation(toolInvocationId, await runLocalTool(tool, args, run.id, log));
+      return { status: inv.status as "completed" | "failed", output: inv.output ?? undefined, creditsMicro: 0n, durationMs: inv.durationMs ?? undefined, error: readError(inv) ?? undefined };
+    },
     settle: async (toolInvocationId, creditsMicro) => {
       await settleToolCharge({ userId: run.userId, runId: run.id, toolInvocationId, creditsMicro });
     },
@@ -126,4 +145,25 @@ function toolPorts(run: { id: string; userId: string; chatId: string }, meta: Me
       if (label) meta.set({ label });
     },
   };
+}
+
+/** Run an in-process tool; its output is checked against the tool's own output schema. */
+async function runLocalTool(tool: AnyTool, args: unknown, runId: string, log: Logger) {
+  try {
+    const exec = tool.exec as LocalExec<never, unknown>;
+    const output = tool.output.parse(
+      await exec.run(args as never, {
+        recordSkill: async (name, contentHash, content) => {
+          const rec = await recordRunSkill(runId, name, contentHash, content);
+          log.info({ skill: name, contentHash: rec.contentHash, first: rec.first }, "skill.loaded");
+          return rec;
+        },
+      }),
+    );
+    return { status: "completed" as const, output };
+  } catch (e) {
+    if (e instanceof ToolRunError) return { status: "failed" as const, error: { code: "invalid_input", message: e.message, retryable: false } };
+    log.error({ err: e, tool: tool.name }, "tool.local_failed");
+    return { status: "failed" as const, error: { code: "tool_failed", message: "The tool could not run.", retryable: true } };
+  }
 }

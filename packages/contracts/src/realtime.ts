@@ -40,4 +40,5 @@ export type StreamPart = z.infer<typeof StreamPart>;
 export const ASSISTANT_STREAM_ID = "assistant";
 
 export const AGENT_TURN_TASK = "agent-turn";
+export const MAGICA_RUN_TASK = "magica-run";
 export const RUN_META_KEY = "gx";

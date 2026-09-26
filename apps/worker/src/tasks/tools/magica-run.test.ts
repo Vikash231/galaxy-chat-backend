@@ -15,7 +15,7 @@ vi.mock("@trigger.dev/sdk", () => ({
   AbortTaskRunError: class extends Error {},
 }));
 
-import { admitTurn, prisma, upsertInvocation } from "@gx/db";
+import { admitTurn, prisma, settleToolCharge, upsertInvocation } from "@gx/db";
 import { resetDb, seedUserWithChat } from "@gx/db/testing";
 import { magicaRun } from "./magica-run";
 
@@ -68,6 +68,36 @@ describe("magica-run", () => {
     expect(row).toMatchObject({ status: "completed", magicaRunId: "mg_1", creditsMicro: 5000n });
     expect(row.durationMs).not.toBeNull();
     expect(await spent()).toBe(5_000n);
+  });
+
+  it("charges the user as soon as Magica reports the cost, even if the parent turn never resumes", async () => {
+    server.use(acceptRun(), runState(completed));
+    const id = await invocation();
+    await run(id);
+
+    const inv = await prisma.toolInvocation.findUniqueOrThrow({ where: { id }, include: { run: true } });
+    expect(await prisma.creditLedger.findMany({ where: { reason: "tool_charge" }, select: { deltaMicro: true, idempotencyKey: true } })).toEqual([
+      { deltaMicro: -5000n, idempotencyKey: `tool:${id}` },
+    ]);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: inv.run.userId } })).balanceMicro).toBe(995_000n);
+    // The parent turn's own settle, when it does resume, is a no-op.
+    expect(await settleToolCharge({ userId: inv.run.userId, runId: inv.runId, toolInvocationId: id, creditsMicro: 5_000n })).toBe(false);
+    expect(await prisma.creditLedger.count({ where: { reason: "tool_charge" } })).toBe(1);
+  });
+
+  it("a retry of an already-finished call charges it once without calling Magica", async () => {
+    const id = await invocation({ status: "completed", creditsMicro: 5_000n, output: { image_url: "https://cdn.magica/c.png" } });
+    await run(id);
+    await run(id);
+    expect(posts).toEqual([]);
+    expect(await prisma.creditLedger.count({ where: { reason: "tool_charge" } })).toBe(1);
+  });
+
+  it("does not charge a call that cost nothing", async () => {
+    const id = await invocation();
+    await prisma.toolInvocation.update({ where: { id }, data: { name: "retired_tool" } });
+    await run(id);
+    expect(await prisma.creditLedger.count({ where: { reason: "tool_charge" } })).toBe(0);
   });
 
   it("never starts a second Magica run when one is already recorded", async () => {

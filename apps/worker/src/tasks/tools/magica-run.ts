@@ -11,11 +11,12 @@ import {
   readError,
   releaseDispatch,
   reserveProviderSpend,
+  settleInvocationCharge,
   type ToolOutcome,
 } from "@gx/db";
 import { MagicaError, isMagicaTerminal, type MagicaRun } from "@gx/magica";
 import { withContext } from "@gx/observability";
-import { getTool, type AnyTool } from "@gx/tools";
+import { getTool, type MagicaTool } from "@gx/tools";
 import { toolRuns } from "../../queues";
 import { getMagica } from "../../services";
 
@@ -36,9 +37,11 @@ export const magicaRun = task({
   run: async ({ toolInvocationId }: { toolInvocationId: string }, { ctx }): Promise<ToolOutcomeWire> => {
     const log = withContext({ toolInvocationId, triggerRunId: ctx.run.id });
     let inv = await getInvocation(toolInvocationId);
-    if (isTerminalTool(inv.status)) return toWire(inv);
+    // Already finished (e.g. a retry after a crash): make sure it was charged, then return the stored result.
+    if (isTerminalTool(inv.status)) return (await settleInvocationCharge(inv.id), toWire(inv));
 
-    const tool = getTool(inv.name);
+    const found = getTool(inv.name);
+    const tool = found?.exec.kind === "magica" ? (found as MagicaTool<never, unknown>) : undefined;
     if (!tool) return finish(toolInvocationId, { status: "failed", error: safe("unknown_tool", "This tool is no longer available.", false) });
 
     const magica = getMagica();
@@ -91,7 +94,7 @@ export const magicaRun = task({
   },
 });
 
-async function settleProviderRun(id: string, tool: AnyTool, run: MagicaRun, estimateMicro: bigint, live: boolean) {
+async function settleProviderRun(id: string, tool: MagicaTool<never, unknown>, run: MagicaRun, estimateMicro: bigint, live: boolean) {
   const creditsMicro = BigInt(Math.round(run.creditUsed));
   if (live) await adjustProviderSpend(PROVIDER, creditsMicro - estimateMicro);
 
@@ -108,7 +111,10 @@ async function settleProviderRun(id: string, tool: AnyTool, run: MagicaRun, esti
 }
 
 async function finish(id: string, outcome: ToolOutcome): Promise<ToolOutcomeWire> {
-  return toWire(await finishInvocation(id, outcome));
+  const inv = await finishInvocation(id, outcome);
+  // Charge here, not only in the parent turn: if the user stopped the turn while Magica worked, Magica still billed us.
+  await settleInvocationCharge(id);
+  return toWire(inv);
 }
 
 type InvocationRow = Awaited<ReturnType<typeof getInvocation>>;

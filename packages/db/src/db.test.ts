@@ -7,8 +7,9 @@ import { admitTurn, transitionRun } from "./runs";
 import { listMessages } from "./messages";
 import { listChats, getOwnedChat } from "./chats";
 import { settleToolCharge, reserveProviderSpend, adjustProviderSpend } from "./credits";
-import { upsertInvocation } from "./tools";
+import { finishInvocation, inFlightProviderCalls, markDispatching, markRunning, upsertInvocation } from "./tools";
 import { reserveFileRefs } from "./attachments";
+import { recordRunSkill } from "./skills";
 import { resetDb, seedUserWithChat } from "./testing";
 
 beforeEach(resetDb);
@@ -139,5 +140,44 @@ describe("credits", () => {
     expect(results.filter(Boolean)).toHaveLength(4);
     await adjustProviderSpend("magica", -5_000n);
     expect(await reserveProviderSpend("magica", 5_000n, 20_000n)).toBe(true);
+  });
+});
+
+describe("run skills", () => {
+  it("records one row per run and skill; later loads, even after the file changed, get the first snapshot", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const { runId } = await send(user.id, chat.id);
+    const first = await recordRunSkill(runId, "product-photo", "hash-v1", "guide v1");
+    // A retry of the same run after someone edited the skill file on disk.
+    const again = await Promise.all([recordRunSkill(runId, "product-photo", "hash-v2", "guide v2"), recordRunSkill(runId, "product-photo", "hash-v2", "guide v2")]);
+    expect(first).toEqual({ contentHash: "hash-v1", content: "guide v1", first: true });
+    expect(again).toEqual([
+      { contentHash: "hash-v1", content: "guide v1", first: false },
+      { contentHash: "hash-v1", content: "guide v1", first: false },
+    ]);
+    expect(await prisma.runSkill.count({ where: { runId } })).toBe(1);
+  });
+
+  it("is removed with its run", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const { runId } = await send(user.id, chat.id);
+    await recordRunSkill(runId, "video-montage", "h", "c");
+    await prisma.agentRun.delete({ where: { id: runId } });
+    expect(await prisma.runSkill.count()).toBe(0);
+  });
+});
+
+describe("in-flight provider calls", () => {
+  it("lists only calls Magica accepted that have not finished", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const { runId } = await send(user.id, chat.id);
+    const make = (toolCallId: string) => upsertInvocation({ runId, toolCallId, seq: 0, name: "crop_image", input: {}, estimateMicro: 5_000n });
+    const [accepted, claimed, done] = await Promise.all([make("0:a"), make("0:b"), make("0:c")]);
+    for (const inv of [accepted, claimed, done]) await markDispatching(inv.id);
+    await markRunning(accepted.id, "mg_a");
+    await markRunning(done.id, "mg_c");
+    await finishInvocation(done.id, { status: "completed", creditsMicro: 5_000n });
+    // claimed has no Magica run id: its outcome is unknown, and it is never re-dispatched.
+    expect(await inFlightProviderCalls(runId)).toEqual([{ id: accepted.id }]);
   });
 });

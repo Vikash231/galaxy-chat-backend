@@ -92,6 +92,7 @@ export const RunView = z.object({
 export type RunView = z.infer<typeof RunView>;
 
 export const CancelResponse = z.object({ runId: id, status: z.union([RunStatus, z.literal("stopping")]) });
+export type CancelResponse = z.infer<typeof CancelResponse>;
 export const HealthResponse = z.object({ ok: z.boolean(), db: z.enum(["up", "down"]) });
 
 // ---- uploads (Transloadit) ----
