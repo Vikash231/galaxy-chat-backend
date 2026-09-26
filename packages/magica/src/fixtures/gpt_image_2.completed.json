@@ -1,0 +1,14 @@
+{
+  "id": "recorded",
+  "nodeType": "gpt_image_2",
+  "status": "COMPLETED",
+  "output": {
+    "result": ["https://g.tlcdn.com/gen/d153abb419a345d29ef5fa02112a01ab.png"],
+    "provider": "fal",
+    "creditUsed": 7644,
+    "resultMetadata": [{ "size": 2079183, "width": 1402, "height": 1122, "modelId": "gpt-image-2", "mimeType": "image/png", "mediaType": "image" }]
+  },
+  "error": null,
+  "userMessage": null,
+  "creditUsed": 7644
+}

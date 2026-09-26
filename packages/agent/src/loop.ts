@@ -10,6 +10,8 @@ export const SYSTEM_PROMPT = [
   "Call a tool when the user asks for a media operation; otherwise answer directly.",
   'Every file in the chat has a short name like img_1. Pass that name to tools (e.g. image: "img_1"); never copy or invent URLs.',
   "If the user asks to edit an image but none is attached, ask them to attach one.",
+  "To create a new image, call gpt_image_2 with only a prompt; to change an existing image, also pass its name in images.",
+  "In replies, describe files by what they show; never mention their names like img_1 to the user.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
 

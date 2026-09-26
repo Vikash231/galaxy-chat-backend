@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { cropImage } from "./crop-image";
+import { gptImage2 } from "./gpt-image-2";
 import type { AnyTool } from "./types";
 
-const TOOLS: AnyTool[] = [cropImage];
+const TOOLS: AnyTool[] = [cropImage, gptImage2];
 const byName = new Map(TOOLS.map((t) => [t.name, t]));
 
 export const getTool = (name: string) => byName.get(name);
@@ -13,7 +14,7 @@ export type LlmToolSpec = { type: "function"; function: { name: string; descript
 /** OpenAI-style function specs generated from each tool's Zod args. */
 export function toolSpecs(): LlmToolSpec[] {
   return TOOLS.map((t) => {
-    const { $schema: _drop, ...parameters } = z.toJSONSchema(t.args) as Record<string, unknown>;
+    const { $schema: _drop, ...parameters } = z.toJSONSchema(t.args, { io: "input" }) as Record<string, unknown>;
     return { type: "function", function: { name: t.name, description: t.description, parameters } };
   });
 }
