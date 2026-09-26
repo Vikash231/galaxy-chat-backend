@@ -22,6 +22,54 @@ export function estimatePlan(steps: PlanStep[], f: FileLookup, deps: Deps): bigi
   return total;
 }
 
+/** Turn whatever a model sent for `steps` into a list of lines: a JSON list, or plain text with one step per line. */
+function stepsFromText(text: string): unknown[] {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Not JSON: treat it as plain text below.
+  }
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/^\s*(?:\d+[.)]|[-*•])\s*/, "").trim()).filter(Boolean);
+  return lines.length ? lines : [text];
+}
+
+/** One step as a model may send it: a bare string, or an object that calls its text something else. */
+function coerceStep(step: unknown): unknown {
+  if (typeof step === "string") return { text: step.slice(0, 300) };
+  if (!step || typeof step !== "object") return step;
+  const s = step as Record<string, unknown>;
+  const text = [s.text, s.description, s.title, s.name, s.step].find((v) => typeof v === "string" && v.trim());
+  return {
+    ...(text !== undefined && { text: (text as string).slice(0, 300) }),
+    ...(s.tool !== undefined && { tool: s.tool }),
+    // The field is a string so file names that do not exist yet are not resolved early.
+    ...(s.args !== undefined && { args: typeof s.args === "object" && s.args !== null ? JSON.stringify(s.args) : s.args }),
+  };
+}
+
+/** Weak models often send steps as text or a list of strings, or leave out the summary; accept those. */
+function coercePlan(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = { ...(raw as Record<string, unknown>) };
+  const steps = typeof r.steps === "string" ? stepsFromText(r.steps) : r.steps;
+  if (Array.isArray(steps)) r.steps = steps.map(coerceStep);
+  if (typeof r.summary !== "string" || !r.summary.trim()) {
+    const first = Array.isArray(r.steps) ? (r.steps[0] as { text?: unknown } | undefined)?.text : undefined;
+    if (typeof first === "string") r.summary = first;
+  }
+  return r;
+}
+
+/** A list a model sent as text: a JSON list, or items split by new lines or commas. */
+function listFromText(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const parsed = stepsFromText(value);
+  if (parsed.length > 1 || value.includes("\n")) return parsed;
+  const parts = value.split(",").map((x) => x.trim()).filter(Boolean);
+  return parts.length > 1 ? parts : parsed;
+}
+
 /** ask_user and propose_plan: free tools that pause the run until the user answers. */
 export function interactionTools(deps: Deps): AnyTool[] {
   const askArgs = z.object({
@@ -37,6 +85,11 @@ export function interactionTools(deps: Deps): AnyTool[] {
     args: askArgs,
     output: askOutput,
     interactive: true,
+    normalize: (raw) => {
+      if (!raw || typeof raw !== "object") return raw;
+      const r = raw as Record<string, unknown>;
+      return { ...r, ...(r.options !== undefined && { options: listFromText(r.options) }), ...(r.files !== undefined && { files: listFromText(r.files) }) };
+    },
     estimateMicro: () => 0n,
     assets: () => [],
     endsTurn: (o) => (o.status === "answered" ? undefined : "I didn't get an answer, so I stopped here. Send a message when you're ready to continue."),
@@ -82,17 +135,12 @@ export function interactionTools(deps: Deps): AnyTool[] {
   const proposePlan: ToolDef<typeof planArgs, z.infer<typeof planOutput>> = {
     name: "propose_plan",
     description:
-      "Only when the instructions say PLAN MODE is on: show the user a plan and wait for approval before any tool that costs credits. Give tool and args for every step that uses a tool, so the cost can be shown. Free. Waits for the answer.",
+      'Only when the instructions say PLAN MODE is on: show the user a plan and wait for approval before any tool that costs credits. Give tool and args for every step that uses a tool, so the cost can be shown. Free. Waits for the answer. Example: {"summary":"Make one fox image","steps":[{"text":"Generate the image","tool":"gpt_image_2","args":{"prompt":"a red fox"}}]}',
     label: "Waiting for plan approval",
     args: planArgs,
     output: planOutput,
     interactive: true,
-    // Models often pass args as an object; the field is a string so file names that do not exist yet are not resolved early.
-    normalize: (raw) => {
-      const r = raw as { steps?: unknown };
-      if (!r || typeof r !== "object" || !Array.isArray(r.steps)) return raw;
-      return { ...r, steps: r.steps.map((s) => (s && typeof s === "object" && (s as { args?: unknown }).args && typeof (s as { args?: unknown }).args === "object" ? { ...s, args: JSON.stringify((s as { args: unknown }).args) } : s)) };
-    },
+    normalize: coercePlan,
     estimateMicro: () => 0n,
     assets: () => [],
     endsTurn: (o) =>

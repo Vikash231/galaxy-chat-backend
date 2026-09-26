@@ -363,6 +363,17 @@ describe("waitpoints", () => {
     expect(tools.dispatch).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["a comma-separated string", "Red, Blue"],
+    ["a JSON string", '["Red","Blue"]'],
+    ["one option per line", "Red\nBlue"],
+  ])("accepts options sent as %s", async (_n, options) => {
+    const ask = vi.fn(async (_k: string, _r: unknown) => answered({ choice: "Red" }));
+    const { llm } = fakeLlm([step({ toolCalls: [askUser("c1", { question: "Colour?", options })] }), step({ text: "ok" })]);
+    await runAgentTurn(ports(llm, fakeTools({ ask })));
+    expect(ask.mock.calls[0]![1]).toMatchObject({ kind: "options", options: ["Red", "Blue"] });
+  });
+
   it("asks about files by name and shows their URLs to the card", async () => {
     const ask = vi.fn(async (_k: string, _r: unknown) => answered({ choice: "vid_2" }));
     const { llm } = fakeLlm([step({ toolCalls: [askUser("c1", { question: "Which is the tiger?", files: ["vid_1", "vid_2"] })] }), step({ text: "ok" })]);
@@ -529,6 +540,43 @@ describe("waitpoints", () => {
       const result = toolMessages(seen[1]!)[0];
       expect(result.note).toBeUndefined();
       expect(result.instruction).toBe("The user approved the plan. Carry it out now.");
+    });
+
+    // The shapes real free models send for a plan; each must still reach the user as a normal plan card.
+    const gptStep = { text: "Generate the image", tool: "gpt_image_2", args: { prompt: "a red fox", size: "1024x1024", quality: "low" } };
+    const shapes: [string, object][] = [
+      ["steps as a JSON string", { summary: "Fox", steps: JSON.stringify([gptStep]) }],
+      ["steps as a numbered text list", { summary: "Fox", steps: "1. Think about the fox\n2. Generate the image" }],
+      ["steps as a list of strings", { summary: "Fox", steps: ["Think about the fox", "Generate the image"] }],
+      ["steps whose text is called description", { summary: "Fox", steps: [{ description: "Generate the image" }] }],
+      ["a missing summary", { steps: [gptStep] }],
+      ["args already given as a string", { summary: "Fox", steps: [{ ...gptStep, args: JSON.stringify(gptStep.args) }] }],
+    ];
+    it.each(shapes)("accepts a plan with %s", async (_name, args) => {
+      const { ask, approvals } = planRun();
+      const { llm } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "propose_plan", argsJson: JSON.stringify(args) }] }), step({ text: "ok" })]);
+      const out = await runAgentTurn(ports(llm, fakeTools({ ask, approvals }), { planMode: true }));
+      expect(ask).toHaveBeenCalledTimes(1);
+      const req = ask.mock.calls[0]![1] as { kind: string; summary: string; steps: { text: string }[] };
+      expect(req.kind).toBe("plan");
+      expect(req.summary.length).toBeGreaterThan(0);
+      expect(req.steps.length).toBeGreaterThan(0);
+      expect(req.steps.every((x) => x.text.length > 0)).toBe(true);
+      expect(out.status).toBe("completed");
+    });
+
+    it("prices a plan sent as a JSON string just like a normal one", async () => {
+      const { ask, approvals } = planRun();
+      const { llm } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "propose_plan", argsJson: JSON.stringify({ summary: "Fox", steps: JSON.stringify([gptStep]) }) }] }), step({ text: "ok" })]);
+      await runAgentTurn(ports(llm, fakeTools({ ask, approvals }), { planMode: true }));
+      expect(ask.mock.calls[0]![1]).toMatchObject({ estimateMicro: 7_644 });
+    });
+
+    it("tells the model the plan shape when it calls a paid tool before planning", async () => {
+      const { ask, approvals } = planRun();
+      const { llm, seen } = fakeLlm([step({ toolCalls: [crop("c1")] }), step({ text: "ok" })]);
+      await runAgentTurn(ports(llm, fakeTools({ ask, approvals }), { planMode: true }));
+      expect(toolMessages(seen[1]!)[0].error).toContain('"steps":[{"text"');
     });
 
     it("cancelling the plan ends the turn with nothing spent", async () => {

@@ -128,7 +128,11 @@ async function executeOne(ports: ToolPorts, { call, tool, args, estimate }: Prep
 }
 
 const SKIPPED: SafeError = { code: "skipped", message: "Skipped: the user was asked a question first. Repeat this call after the answer if it is still needed.", retryable: false };
-const PLAN_FIRST: SafeError = { code: "plan_required", message: "Plan mode is on. Call propose_plan and wait for the user's approval before using this tool.", retryable: false };
+const PLAN_FIRST: SafeError = {
+  code: "plan_required",
+  message: 'Plan mode is on. Call propose_plan and wait for the user\'s approval before using this tool. Send steps as a list of objects, e.g. {"summary":"...","steps":[{"text":"...","tool":"gpt_image_2","args":{"prompt":"..."}}]}.',
+  retryable: false,
+};
 const DECLINED: SafeError = { code: "declined", message: "The user declined the cost. Do not retry this call; say what you could do instead.", retryable: false };
 const NO_ANSWER_NOTE = "I didn't get an answer about the cost, so I stopped here. Nothing was spent. Send a message when you're ready to continue.";
 
