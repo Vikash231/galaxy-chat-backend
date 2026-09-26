@@ -109,6 +109,7 @@ export const AttachmentView = z.object({
   sizeBytes: z.number().int(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
+  durationSec: z.number().nonnegative().nullable(),
   url: z.string().url(),
   persistent: z.boolean(),
 });

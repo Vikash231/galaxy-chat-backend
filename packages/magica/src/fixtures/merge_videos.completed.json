@@ -1,0 +1,19 @@
+{
+  "id": "recorded",
+  "nodeType": "merge_videos",
+  "status": "COMPLETED",
+  "output": {
+    "fps": 24,
+    "width": 1280,
+    "format": "mp4",
+    "height": 720,
+    "duration": 21.108,
+    "fileSize": 9130080,
+    "mimeType": "video/mp4",
+    "video_url": "https://g.tlcdn.com/gen/b69cc23a94dd4c179355306d2fd911dd.mp4",
+    "creditUsed": 17590
+  },
+  "error": null,
+  "userMessage": null,
+  "creditUsed": 17590
+}

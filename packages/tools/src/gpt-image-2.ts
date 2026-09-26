@@ -50,6 +50,7 @@ export const gptImage2: ToolDef<typeof args, z.infer<typeof output>> = {
     "Create images from a text prompt, or edit existing images (pass their names in images). " +
     "Returns the generated image URLs.",
   label: "Generating image",
+  accepts: "image",
   args,
   // Models often send a single image as a string or under image/image_url.
   normalize: (raw) => {

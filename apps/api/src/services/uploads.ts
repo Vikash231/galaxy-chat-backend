@@ -57,7 +57,7 @@ type AssemblyFile = {
   mime: string;
   size: number;
   ssl_url: string;
-  meta?: { width?: number; height?: number };
+  meta?: { width?: number; height?: number; duration?: number };
 };
 type Assembly = {
   ok?: string;
@@ -104,6 +104,7 @@ export async function completeUpload(user: UserRow, assemblyId: string, log: Log
       sizeBytes: f.size,
       width: f.meta?.width ?? null,
       height: f.meta?.height ?? null,
+      durationSec: f.meta?.duration ?? null,
       url: f.ssl_url,
       persistent,
     })),

@@ -22,6 +22,7 @@ export const RunMeta = z.object({
       durationMs: z.number().int().optional(),
       credits: z.string().optional(),
       assetUrl: z.string().optional(),
+      assetKind: z.enum(["image", "video", "audio"]).optional(),
       error: SafeError.optional(),
     }),
   ),

@@ -18,6 +18,7 @@ export const toAttachmentView = (a: Row): AttachmentView => ({
   sizeBytes: Number(a.sizeBytes),
   width: a.width,
   height: a.height,
+  durationSec: a.durationSec,
   url: a.url,
   persistent: a.persistent,
 });
@@ -58,7 +59,7 @@ export async function claimAttachments(tx: Tx, userId: string, chatId: string, m
   const refs = await reserveFileRefs(tx, chatId, ids.map((id) => byId.get(id)!.kind as FileKind));
   return ids.map((id, i) => {
     const a = byId.get(id)!;
-    return { type: "attachment", attachmentId: a.id, ref: refs[i], kind: a.kind as FileKind, url: a.url, name: a.name, mime: a.mime, width: a.width, height: a.height };
+    return { type: "attachment", attachmentId: a.id, ref: refs[i], kind: a.kind as FileKind, url: a.url, name: a.name, mime: a.mime, width: a.width, height: a.height, durationSec: a.durationSec };
   });
 }
 

@@ -31,6 +31,7 @@ export const cropImage: ToolDef<typeof args, z.infer<typeof output>> = {
     "Crop an image. Use percent units for relative regions (e.g. left half: x=0,y=0,width=50,height=100) " +
     "or pixel units for exact sizes. Returns the cropped image URL.",
   label: "Cropping image",
+  accepts: "image",
   args,
   // Accept the documented `crop: {x, y, width, height}` shape and the older `image_url` field as aliases.
   normalize: (raw) => {

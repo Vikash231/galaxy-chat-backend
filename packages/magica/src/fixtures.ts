@@ -1,11 +1,13 @@
 import type { MagicaRun } from "./types";
 import cropImage from "./fixtures/crop_image.completed.json";
 import gptImage2 from "./fixtures/gpt_image_2.completed.json";
+import mergeVideos from "./fixtures/merge_videos.completed.json";
 
 // Real responses recorded from live runs; fixture mode replays them without calling Magica.
 const RECORDED: Record<string, Omit<MagicaRun, "id">> = {
   crop_image: cropImage as Omit<MagicaRun, "id">,
   gpt_image_2: gptImage2 as Omit<MagicaRun, "id">,
+  merge_videos: mergeVideos as Omit<MagicaRun, "id">,
 };
 
 export function fixtureRun(runId: string, nodeType: string): MagicaRun {

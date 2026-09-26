@@ -14,6 +14,38 @@ export function collectFiles(history: { content: ContentBlock[] }[]): Map<string
   return files;
 }
 
+/** Uploaded file name → short name, for names that match exactly one upload in the chat. */
+export function collectAliases(history: { content: ContentBlock[] }[]): Map<string, string> {
+  const seen = new Map<string, string | null>();
+  for (const m of history)
+    for (const b of m.content) if (b.type === "attachment") seen.set(b.name, seen.has(b.name) ? null : refOf(b));
+  return new Map([...seen].filter((e): e is [string, string] => e[1] !== null));
+}
+
+/** Known lengths of video/audio files, by URL; duration-billed tools estimate from these. */
+export function collectDurations(history: { content: ContentBlock[] }[]): Map<string, number> {
+  const durations = new Map<string, number>();
+  for (const m of history) for (const b of m.content) if ((b.type === "attachment" || b.type === "asset") && b.durationSec != null) durations.set(b.url, b.durationSec);
+  return durations;
+}
+
+const SPOKEN = { img: "the image", vid: "the video", aud: "the audio" } as const;
+
+/**
+ * Keep internal file names and invented media markup out of reply text; the app already shows the files.
+ * Models are told this in the prompt, but small free models ignore it.
+ */
+export function hideFileNames(text: string): string {
+  return text
+    .replace(/<(video|audio|img)\b[^>]*>[\s\S]*?<\/\1>|<(video|audio|img)\b[^>]*\/?>/gi, "")
+    .replace(/!?\[[^\]]*\]\(\s*(?:img|vid|aud)_[a-z0-9]+\s*\)/g, "")
+    .replace(/\s*\((?:img|vid|aud)_[a-z0-9]+\)/g, "")
+    // Standalone names only: never inside a URL or filename like example.com/img_1.png.
+    .replace(/[`"']?(?<![\w/.-])(img|vid|aud)_[a-z0-9]+(?![\w-]|\.\w)[`"']?/g, (_m, kind: keyof typeof SPOKEN) => SPOKEN[kind])
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Replace file URLs inside a tool output with their names, so the model never has to copy a URL. */
 export function withRefs(value: unknown, urlToRef: ReadonlyMap<string, string>): unknown {
   if (typeof value === "string") return urlToRef.get(value) ?? value;

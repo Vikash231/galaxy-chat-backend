@@ -1,7 +1,7 @@
 import type { ContentBlock, RunMeta, SafeError, StreamPart } from "@gx/contracts";
 import type { LlmMessage, LlmProvider, LlmToolSpec, StepResult } from "@gx/llm";
 import { executeTools, type ExecutedCall, type PendingCall, type ToolPorts } from "./executor";
-import { collectFiles } from "./files";
+import { collectAliases, collectDurations, collectFiles, hideFileNames } from "./files";
 import { toLlmMessages, type StoredMessage } from "./history";
 import { llmCallId, toolCallKey } from "./ids";
 
@@ -11,6 +11,9 @@ export const SYSTEM_PROMPT = [
   'Every file in the chat has a short name like img_1. Pass that name to tools (e.g. image: "img_1"); never copy or invent URLs.',
   "If the user asks to edit an image but none is attached, ask them to attach one.",
   "To create a new image, call gpt_image_2 with only a prompt; to change an existing image, also pass its name in images.",
+  "To join videos end to end, call merge_videos with their names in the order the user wants.",
+  "If the user's wording about order, or about which file is which, is unclear, ask a short question before calling a tool; tool runs cost credits.",
+  'After merging, say the final order in plain words, e.g. "the 6-second clip, then the 15-second clip".',
   "In replies, describe files by what they show; never mention their names like img_1 to the user.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
@@ -33,7 +36,7 @@ export type TurnOutcome = { status: "completed" | "failed"; blocks: ContentBlock
 export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const blocks: ContentBlock[] = [];
   const history = await p.history();
-  const files = collectFiles(history);
+  const fileCtx = { files: collectFiles(history), aliases: collectAliases(history), durations: collectDurations(history) };
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
   const messages: LlmMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...toLlmMessages(history)];
@@ -47,13 +50,14 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
 
     const calls: PendingCall[] = res.toolCalls.map((c, i) => ({ key: toolCallKey(step, c.id), seq: step * 100 + i, name: c.name, argsJson: c.argsJson }));
     if (res.thinking) blocks.push({ type: "thinking", text: res.thinking });
-    if (res.text) blocks.push({ type: "text", text: res.text });
+    const text = hideFileNames(res.text);
+    if (text) blocks.push({ type: "text", text });
     for (const c of calls) blocks.push({ type: "tool_use", toolCallId: c.key, name: c.name, input: safeJson(c.argsJson) });
     await p.checkpoint(blocks, step, res);
     if (!calls.length) return finish({ status: "completed" });
 
     p.meta({ status: "working", step });
-    const results: ExecutedCall[] = await executeTools(p.tools, calls, files);
+    const results: ExecutedCall[] = await executeTools(p.tools, calls, fileCtx);
     messages.push({
       role: "assistant",
       content: res.text || null,

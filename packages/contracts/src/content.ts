@@ -24,7 +24,14 @@ export const ContentBlock = z.discriminatedUnion("type", [
     durationMs: z.number().int().nonnegative().optional(),
   }),
   // `ref` is the file's short, chat-unique name (img_3); models pass it to tools instead of copying URLs.
-  z.object({ type: z.literal("asset"), kind: AssetKind, url: z.string().url(), toolCallId: z.string(), ref: z.string().optional() }),
+  z.object({
+    type: z.literal("asset"),
+    kind: AssetKind,
+    url: z.string().url(),
+    toolCallId: z.string(),
+    ref: z.string().optional(),
+    durationSec: z.number().nonnegative().optional(),
+  }),
   z.object({
     type: z.literal("attachment"),
     attachmentId: z.string(),
@@ -35,6 +42,7 @@ export const ContentBlock = z.discriminatedUnion("type", [
     mime: z.string(),
     width: z.number().int().nullable(),
     height: z.number().int().nullable(),
+    durationSec: z.number().nonnegative().nullable().optional(),
   }),
   z.object({ type: z.literal("error"), error: SafeError }),
   // What one assistant turn cost: billed tool credits plus token usage (LLM usage is billed at 0 credits).

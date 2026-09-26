@@ -11,7 +11,11 @@ const textOf = (blocks: ContentBlock[]) =>
 /** Uploaded files reach the model by name only; tools turn the name back into the URL. */
 const attachmentLines = (blocks: ContentBlock[]) =>
   blocks
-    .flatMap((b) => (b.type === "attachment" ? [`Attached ${b.kind} ${refOf(b)}: "${b.name}"${b.width && b.height ? ` (${b.width}x${b.height})` : ""}`] : []))
+    .flatMap((b) => {
+      if (b.type !== "attachment") return [];
+      const facts = [b.width && b.height ? `${b.width}x${b.height}` : "", b.durationSec != null ? `${Math.round(b.durationSec)}s` : ""].filter(Boolean).join(", ");
+      return [`Attached ${b.kind} ${refOf(b)}: "${b.name}"${facts ? ` (${facts})` : ""}`];
+    })
     .join("\n");
 
 /** A tool result as the model sees it: file URLs in the output are replaced by the files' names. */

@@ -5,6 +5,7 @@ import { parseArgs, toolSpecs } from "./registry";
 const url = "https://example.com/a.png";
 const files = new Map([["img_1", url]]);
 const parse = (args: object) => parseArgs(gptImage2, JSON.stringify(args), files);
+const noFiles = { durationSec: () => undefined };
 const argsOf = (r: ReturnType<typeof parse>) => {
   if (!r.ok) throw new Error(r.message);
   return r.args as Parameters<typeof gptImage2.exec.toInput>[0];
@@ -15,7 +16,7 @@ describe("gpt_image_2 input", () => {
     const a = argsOf(parse({ prompt: "a red fox" }));
     expect(gptImage2.exec.subModelId!(a)).toBe("gpt-image-2-text");
     expect(gptImage2.exec.toInput(a)).toEqual({ prompt: "a red fox", size: "Auto", quality: "Low", background: "Auto", n: 1 });
-    expect(gptImage2.estimateMicro(a)).toBe(7_644n); // matches the live bill
+    expect(gptImage2.estimateMicro(a, noFiles)).toBe(7_644n); // matches the live bill
   });
 
   it("edits named images with the edit submodel and resolves names to URLs", () => {
@@ -30,7 +31,7 @@ describe("gpt_image_2 input", () => {
   });
 
   it("prices by quality, size and count", () => {
-    expect(gptImage2.estimateMicro(argsOf(parse({ prompt: "x", quality: "high", size: "2048x2048", n: 2 })))).toBe(1_113_216n);
+    expect(gptImage2.estimateMicro(argsOf(parse({ prompt: "x", quality: "high", size: "2048x2048", n: 2 })), noFiles)).toBe(1_113_216n);
   });
 
   it.each([
