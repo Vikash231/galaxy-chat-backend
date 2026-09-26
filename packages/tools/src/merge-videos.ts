@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolDef } from "./types";
+import type { MagicaTool } from "./types";
 
 // From docs/magica/merge_videos.pricing.json: 40,000 per minute plus 10,000 per extra video per minute, prorated.
 // A live run billed exactly this on the output length (21.108 s, 2 videos → 17,590), with no markup.
@@ -36,7 +36,7 @@ const output = z.object({
   video: z.object({ url: z.string().url(), durationSec: z.number().nonnegative().optional(), width: z.number().int().optional(), height: z.number().int().optional() }),
 });
 
-export const mergeVideos: ToolDef<typeof args, z.infer<typeof output>> = {
+export const mergeVideos: MagicaTool<typeof args, z.infer<typeof output>> = {
   name: "merge_videos",
   description: "Join 2 or more videos end to end into one video, in the given order. Returns the merged video URL.",
   label: "Merging videos",

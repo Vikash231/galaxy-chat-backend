@@ -111,6 +111,7 @@ model AgentRun {
   assistantMessage Message?         @relation("RunAssistantMessage")
   tools            ToolInvocation[]
   ledger           CreditLedger[]
+  skills           RunSkill[]
 
   @@index([chatId, createdAt])
   @@index([userId, createdAt])
@@ -183,6 +184,19 @@ model Attachment {
   @@index([userId, createdAt])
   @@index([messageId])
   @@index([createdAt])
+}
+
+// A skill loaded during a run. The content snapshot makes a retried or resumed run use the same guidance.
+model RunSkill {
+  id          String   @id @default(cuid())
+  runId       String
+  run         AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  name        String
+  contentHash String
+  content     String
+  createdAt   DateTime @default(now())
+
+  @@unique([runId, name])
 }
 
 // One row per provider per day; the spend cap is a single-row conditional update.

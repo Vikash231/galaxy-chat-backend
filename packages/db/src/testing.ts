@@ -5,7 +5,7 @@ import { ensureUser } from "./users";
 export async function resetDb() {
   if (!process.env.DATABASE_URL?.includes("_test")) throw new Error("resetDb refuses to run against a non-test database");
   await prisma.$executeRawUnsafe(
-    `TRUNCATE "Attachment", "CreditLedger", "ToolInvocation", "Message", "AgentRun", "Chat", "User", "ProviderSpendDaily" RESTART IDENTITY CASCADE`,
+    `TRUNCATE "RunSkill", "Attachment", "CreditLedger", "ToolInvocation", "Message", "AgentRun", "Chat", "User", "ProviderSpendDaily" RESTART IDENTITY CASCADE`,
   );
 }
 

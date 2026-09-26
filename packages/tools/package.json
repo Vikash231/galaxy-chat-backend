@@ -2,6 +2,12 @@
   "name": "@gx/tools",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@gx/contracts": "workspace:*", "zod": "4.6.5" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@gx/contracts": "workspace:*",
+    "@gx/skills": "workspace:*",
+    "zod": "4.6.5"
+  }
 }

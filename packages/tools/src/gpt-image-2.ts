@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolDef } from "./types";
+import type { MagicaTool } from "./types";
 
 const SIZES = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160", "2160x3840"] as const;
 const QUALITIES = ["low", "medium", "high"] as const;
@@ -44,7 +44,7 @@ const raw = z.object({
 
 const output = z.object({ images: z.array(z.object({ url: z.string().url(), width: z.number().int().optional(), height: z.number().int().optional() })).min(1) });
 
-export const gptImage2: ToolDef<typeof args, z.infer<typeof output>> = {
+export const gptImage2: MagicaTool<typeof args, z.infer<typeof output>> = {
   name: "gpt_image_2",
   description:
     "Create images from a text prompt, or edit existing images (pass their names in images). " +

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ContentBlock, StreamPart } from "@gx/contracts";
 import type { LlmProvider, StepResult, LlmMessage } from "@gx/llm";
-import { runAgentTurn, type TurnPorts } from "./loop";
+import { installSkills, skillIndex, toolSpecs, type LocalExec } from "@gx/tools";
+import type { SkillSet } from "@gx/skills";
+import { runAgentTurn, systemPrompt, type TurnPorts } from "./loop";
 import type { ToolPorts, ToolOutcome } from "./executor";
 import { toLlmMessages } from "./history";
 
@@ -24,11 +26,23 @@ function fakeLlm(steps: StepResult[]) {
 function fakeTools(opts: { balance?: bigint; outcome?: (id: string) => ToolOutcome } = {}) {
   let n = 0;
   let fileSeq = 0;
+  const recorded = new Map<string, { contentHash: string; content: string }>();
   const ports: ToolPorts = {
     reserveFileRefs: vi.fn(async (kinds) => kinds.map(() => `img_${++fileSeq}`)),
     balance: async () => opts.balance ?? 1_000_000n,
     upsert: vi.fn(async () => ({ id: `inv_${n++}`, status: "pending" as const, output: null, creditsMicro: 0n, error: null })),
     dispatch: vi.fn(async (_t, id) => opts.outcome?.(id) ?? { status: "completed" as const, output: { image_url: `https://cdn/${id}.png` }, creditsMicro: 5_000n }),
+    runLocal: vi.fn(async (tool, args) => {
+      const exec = tool.exec as LocalExec<never, unknown>;
+      const output = await exec.run(args as never, {
+        recordSkill: async (name, contentHash, content) => {
+          const first = !recorded.has(name);
+          if (first) recorded.set(name, { contentHash, content });
+          return { ...recorded.get(name)!, first };
+        },
+      });
+      return { status: "completed" as const, output, creditsMicro: 0n };
+    }),
     settle: vi.fn(async () => {}),
     update: vi.fn(),
   };
@@ -207,5 +221,112 @@ describe("history mapping", () => {
     expect(t.tool_call_id).toBe(a.tool_calls![0]!.id);
     expect(t.tool_call_id).toMatch(/^[a-z0-9]{9}$/);
     expect(done).toEqual({ role: "assistant", content: "Done." });
+  });
+});
+
+describe("skills in the agent loop", () => {
+  const set: SkillSet = {
+    skills: new Map([
+      ["social-media-sizes", { name: "social-media-sizes", description: "Platform sizes. Use when the user names a platform.", dir: "/skills/social-media-sizes", body: "GUIDE: story is 1080x1920", hash: "h1", assets: [] }],
+      ["video-montage", { name: "video-montage", description: "Merging clips. Use when joining videos.", dir: "/skills/video-montage", body: "GUIDE: montage", hash: "h2", assets: [] }],
+    ]),
+    rejected: [],
+  };
+  const withSkills = (fn: () => Promise<void>) => async () => {
+    installSkills(set);
+    try {
+      await fn();
+    } finally {
+      installSkills({ skills: new Map(), rejected: [] });
+    }
+  };
+  const load = (id: string, name: string) => ({ id, name: "load_skill", argsJson: JSON.stringify({ name }) });
+
+  it("puts only names and descriptions in the prompt, and adds the loader tools", withSkills(async () => {
+    const prompt = systemPrompt(skillIndex(set));
+    expect(prompt).toContain("- social-media-sizes: Platform sizes. Use when the user names a platform.");
+    expect(prompt).not.toContain("GUIDE:");
+    expect(toolSpecs().map((t) => t.function.name)).toEqual(["crop_image", "gpt_image_2", "merge_videos", "load_skill", "read_skill_asset"]);
+    expect(systemPrompt([])).not.toContain("Skills:");
+  }));
+
+  it("loads only the skill the model asks for, free, then continues to the tool", withSkills(async () => {
+    const { llm, seen } = fakeLlm([
+      step({ toolCalls: [load("c1", "social-media-sizes")] }),
+      step({ toolCalls: [{ id: "c2", name: "crop_image", argsJson: cropArgs() }] }),
+      step({ text: "Cropped to 1080x1920." }),
+    ]);
+    const tools = fakeTools();
+    const out = await runAgentTurn(ports(llm, tools, { skills: skillIndex(set) }));
+
+    expect(out.status).toBe("completed");
+    const toolMessages = seen[2]!.filter((m) => m.role === "tool").map((m) => m.content as string);
+    expect(toolMessages[0]).toContain("GUIDE: story is 1080x1920");
+    expect(JSON.stringify(seen)).not.toContain("GUIDE: montage");
+    expect(tools.runLocal).toHaveBeenCalledTimes(1);
+    expect(tools.dispatch).toHaveBeenCalledTimes(1); // only crop_image reaches Magica
+    expect(tools.settle).toHaveBeenCalledTimes(1);
+    expect(out.blocks.at(-1)).toMatchObject({ type: "usage", creditsMicro: 5000 });
+  }));
+
+  it("a second load of the same skill in a run is marked as already loaded", withSkills(async () => {
+    const { llm, seen } = fakeLlm([step({ toolCalls: [load("c1", "video-montage")] }), step({ toolCalls: [load("c2", "video-montage")] }), step({ text: "ok" })]);
+    await runAgentTurn(ports(llm, fakeTools(), { skills: skillIndex(set) }));
+    const results = seen[2]!.filter((m) => m.role === "tool").map((m) => JSON.parse(m.content as string));
+    expect(results.map((r) => r.alreadyLoaded)).toEqual([false, true]);
+  }));
+
+  it("rejects an unknown skill before running anything", withSkills(async () => {
+    const { llm, seen } = fakeLlm([step({ toolCalls: [load("c1", "nope")] }), step({ text: "ok" })]);
+    const tools = fakeTools();
+    await runAgentTurn(ports(llm, tools, { skills: skillIndex(set) }));
+    expect(tools.runLocal).not.toHaveBeenCalled();
+    expect(seen[1]!.at(-1)!.content).toContain("social-media-sizes");
+  }));
+});
+
+describe("interrupted steps", () => {
+  // Streams some thinking and text, then fails the way an abort (Stop) or a dropped connection does.
+  const interruptingLlm = (thinking: string, text: string): LlmProvider => ({
+    async streamStep(_req, onDelta) {
+      if (thinking) onDelta({ type: "thinking", delta: thinking });
+      for (const word of text.split(/(?<= )/)) onDelta({ type: "text", delta: word });
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    },
+  });
+
+  it("keeps the thinking and text the user already saw, then rethrows", async () => {
+    const p = ports(interruptingLlm("Planning the crop", "Sure, I will crop the left half of "), fakeTools());
+    await expect(runAgentTurn(p)).rejects.toThrow("aborted");
+    expect(p.checkpoints.at(-1)).toEqual([
+      { type: "thinking", text: "Planning the crop" },
+      { type: "text", text: "Sure, I will crop the left half of" },
+    ]);
+  });
+
+  it("keeps earlier completed steps and hides file names in the partial text", async () => {
+    let call = 0;
+    const llm: LlmProvider = {
+      async streamStep(req, onDelta) {
+        if (call++ === 0) return step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs() }] });
+        return interruptingLlm("", "Cropped img_1 and now ").streamStep(req, onDelta);
+      },
+    };
+    const p = ports(llm, fakeTools());
+    await expect(runAgentTurn(p)).rejects.toThrow("aborted");
+    const last = p.checkpoints.at(-1)!;
+    expect(last.map((b) => b.type)).toEqual(["tool_use", "tool_result", "asset", "text"]);
+    expect(last.at(-1)).toEqual({ type: "text", text: "Cropped the image and now" });
+  });
+
+  it("does not write a checkpoint when nothing streamed before the failure", async () => {
+    const p = ports(interruptingLlm("", ""), fakeTools());
+    await expect(runAgentTurn(p)).rejects.toThrow("aborted");
+    expect(p.checkpoints).toEqual([]);
+  });
+
+  it("still rethrows the original error when saving the partial output fails", async () => {
+    const p = ports(interruptingLlm("", "partial"), fakeTools(), { checkpoint: async () => Promise.reject(new Error("db down")) });
+    await expect(runAgentTurn(p)).rejects.toThrow("aborted");
   });
 });

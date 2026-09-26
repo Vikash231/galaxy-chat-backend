@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolDef } from "./types";
+import type { MagicaTool } from "./types";
 
 const args = z
   .object({
@@ -25,7 +25,7 @@ const args = z
 // Shape confirmed from a live run: { image_url, width, height, creditUsed }.
 const output = z.object({ image_url: z.string().url(), width: z.number().int().optional(), height: z.number().int().optional() });
 
-export const cropImage: ToolDef<typeof args, z.infer<typeof output>> = {
+export const cropImage: MagicaTool<typeof args, z.infer<typeof output>> = {
   name: "crop_image",
   description:
     "Crop an image. Use percent units for relative regions (e.g. left half: x=0,y=0,width=50,height=100) " +

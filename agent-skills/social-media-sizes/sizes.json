@@ -1,0 +1,9 @@
+{
+  "instagram": { "post": [1080, 1080], "portrait": [1080, 1350], "story": [1080, 1920], "reel": [1080, 1920] },
+  "facebook": { "post": [1200, 630], "story": [1080, 1920], "cover": [1640, 624] },
+  "x": { "post": [1600, 900], "header": [1500, 500] },
+  "linkedin": { "post": [1200, 627], "banner": [1584, 396] },
+  "youtube": { "thumbnail": [1280, 720], "banner": [2560, 1440] },
+  "tiktok": { "video_cover": [1080, 1920] },
+  "pinterest": { "pin": [1000, 1500] }
+}

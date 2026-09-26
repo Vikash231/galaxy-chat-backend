@@ -14,6 +14,7 @@
     "@gx/llm": "workspace:*",
     "@gx/magica": "workspace:*",
     "@gx/observability": "workspace:*",
+    "@gx/skills": "workspace:*",
     "@gx/tools": "workspace:*",
     "@trigger.dev/sdk": "4.6.4"
   },

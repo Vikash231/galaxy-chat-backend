@@ -10,6 +10,8 @@ export interface ToolPorts {
   balance(): Promise<bigint>;
   upsert(i: { toolCallId: string; seq: number; name: string; input: unknown; estimateMicro: bigint }): Promise<Invocation>;
   dispatch(tool: AnyTool, toolInvocationId: string): Promise<ToolOutcome>;
+  /** Run a free, in-process tool (e.g. load_skill) and record its outcome. */
+  runLocal(tool: AnyTool, args: unknown, toolInvocationId: string): Promise<ToolOutcome>;
   settle(toolInvocationId: string, creditsMicro: bigint): Promise<void>;
   /** Reserve chat-unique names (img_4, …) for new result files. */
   reserveFileRefs(kinds: ("image" | "video" | "audio")[]): Promise<string[]>;
@@ -62,7 +64,9 @@ async function executeOne(ports: ToolPorts, call: PendingCall, { files, aliases,
   const outcome: ToolOutcome =
     inv.status === "completed" || inv.status === "failed" || inv.status === "cancelled"
       ? { status: inv.status, output: inv.output, creditsMicro: inv.creditsMicro, durationMs: inv.durationMs ?? undefined, error: inv.error ?? undefined }
-      : await ports.dispatch(tool, inv.id);
+      : tool.exec.kind === "local"
+        ? await ports.runLocal(tool, parsed.args, inv.id)
+        : await ports.dispatch(tool, inv.id);
 
   if (outcome.creditsMicro > 0n) await ports.settle(inv.id, outcome.creditsMicro);
 

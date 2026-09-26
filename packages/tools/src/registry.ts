@@ -2,13 +2,22 @@ import { z } from "zod";
 import { cropImage } from "./crop-image";
 import { gptImage2 } from "./gpt-image-2";
 import { mergeVideos } from "./merge-videos";
+import { skillTools } from "./skills";
+import type { SkillSet } from "@gx/skills";
 import type { AnyTool, FileKind } from "./types";
 
-const TOOLS: AnyTool[] = [cropImage, gptImage2, mergeVideos];
-const byName = new Map(TOOLS.map((t) => [t.name, t]));
+const MEDIA_TOOLS: AnyTool[] = [cropImage, gptImage2, mergeVideos];
+let TOOLS: AnyTool[] = MEDIA_TOOLS;
+let byName = new Map(TOOLS.map((t) => [t.name, t]));
 
 export const getTool = (name: string) => byName.get(name);
 export const listTools = () => TOOLS;
+
+/** Add the skill loader tools for these skills; called once when the worker starts. */
+export function installSkills(set: SkillSet) {
+  TOOLS = [...MEDIA_TOOLS, ...skillTools(set)];
+  byName = new Map(TOOLS.map((t) => [t.name, t]));
+}
 
 export type LlmToolSpec = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
 

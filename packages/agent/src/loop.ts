@@ -5,7 +5,7 @@ import { collectAliases, collectDurations, collectFiles, hideFileNames } from ".
 import { toLlmMessages, type StoredMessage } from "./history";
 import { llmCallId, toolCallKey } from "./ids";
 
-export const SYSTEM_PROMPT = [
+const BASE_PROMPT = [
   "You are Galaxy, an assistant that can edit and create media with tools.",
   "Call a tool when the user asks for a media operation; otherwise answer directly.",
   'Every file in the chat has a short name like img_1. Pass that name to tools (e.g. image: "img_1"); never copy or invent URLs.',
@@ -18,11 +18,24 @@ export const SYSTEM_PROMPT = [
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
 
+/** Base instructions plus the skills list: names and descriptions only, never the guides themselves. */
+export function systemPrompt(skills: string[] = []): string {
+  if (!skills.length) return BASE_PROMPT;
+  return [
+    BASE_PROMPT,
+    "Skills are free guides for specific kinds of work. When a request matches one, call load_skill before acting, then follow it; read its extra files with read_skill_asset only when the guide asks.",
+    "Skills:",
+    ...skills,
+  ].join("\n");
+}
+
 export interface TurnPorts {
   llm: LlmProvider;
   toolSpecs: LlmToolSpec[];
   tools: ToolPorts;
   maxSteps: number;
+  /** Skills list lines for the system prompt (see systemPrompt). */
+  skills?: string[];
   signal?: AbortSignal;
   history(): Promise<StoredMessage[]>;
   emit(part: StreamPart): void;
@@ -39,11 +52,22 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const fileCtx = { files: collectFiles(history), aliases: collectAliases(history), durations: collectDurations(history) };
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
-  const messages: LlmMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...toLlmMessages(history)];
+  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(p.skills) }, ...toLlmMessages(history)];
 
   for (let step = 0; step < p.maxSteps; step++) {
     p.meta({ status: "thinking", step, label: undefined });
-    const res = await p.llm.streamStep({ messages, tools: p.toolSpecs, signal: p.signal }, (d) => p.emit({ t: d.type, step, d: d.delta }));
+    const partial = { text: "", thinking: "" };
+    let res: StepResult;
+    try {
+      res = await p.llm.streamStep({ messages, tools: p.toolSpecs, signal: p.signal }, (d) => {
+        partial[d.type] += d.delta;
+        p.emit({ t: d.type, step, d: d.delta });
+      });
+    } catch (e) {
+      // Stopped or failed mid-step: keep what the user already saw stream in, then let the caller finalize.
+      await keepPartial(blocks, partial, step, p);
+      throw e;
+    }
     usage.promptTokens += res.usage.promptTokens;
     usage.completionTokens += res.usage.completionTokens;
     if (!usage.models.includes(res.model)) usage.models.push(res.model);
@@ -83,4 +107,12 @@ function safeJson(s: string): unknown {
   } catch {
     return { raw: s };
   }
+}
+
+/** Save the thinking and text streamed before an interrupted step; a failed save must not hide the real error. */
+async function keepPartial(blocks: ContentBlock[], partial: { text: string; thinking: string }, step: number, p: TurnPorts) {
+  const text = hideFileNames(partial.text);
+  if (partial.thinking.trim()) blocks.push({ type: "thinking", text: partial.thinking });
+  if (text) blocks.push({ type: "text", text });
+  if (partial.thinking.trim() || text) await p.checkpoint(blocks, step).catch(() => {});
 }
