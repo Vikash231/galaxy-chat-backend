@@ -602,3 +602,20 @@ describe("waitpoints", () => {
     });
   });
 });
+
+describe("retry", () => {
+  it("tells the model the last try stopped, without saving it, and puts the note after the history", async () => {
+    const note = "The previous reply stopped (Free models are busy). Continue the task. Reuse any results already shown above, and do not repeat paid steps that already completed.";
+    const { llm, seen } = fakeLlm([step({ text: "Continuing." })]);
+    await runAgentTurn(ports(llm, fakeTools(), { retryNote: note }));
+    const last = seen[0]!.at(-1)!;
+    expect(last).toEqual({ role: "user", content: note });
+    expect(seen[0]!.filter((m) => m.role === "user")).toHaveLength(2); // the original message, then the note
+  });
+
+  it("adds nothing on a normal turn", async () => {
+    const { llm, seen } = fakeLlm([step({ text: "Hi." })]);
+    await runAgentTurn(ports(llm, fakeTools()));
+    expect(seen[0]!.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+});

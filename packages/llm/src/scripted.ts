@@ -31,7 +31,8 @@ export function createScriptedProvider(): LlmProvider {
         return step({ toolCalls: [call("gpt_image_2", { ...lowFox, prompt: note ? `${lowFox.prompt}, ${note}` : lowFox.prompt })] });
       }
       if (last?.role === "tool") return say(`The tool said: ${last.content.slice(0, 200)}`);
-      const user = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+      // A retry adds a note as the last user message; the request is the one before it.
+      const user = [...messages].reverse().find((m) => m.role === "user" && !m.content.startsWith("The previous reply stopped"))?.content ?? "";
 
       if (user.includes("[ask]")) return step({ toolCalls: [call("ask_user", { question: "Which colour do you prefer?", options: ["Red", "Blue"] })] });
       if (user.includes("[plan]"))

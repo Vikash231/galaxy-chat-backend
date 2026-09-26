@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@gx/contracts";
 import { prisma } from "./client";
 import { ensureUser } from "./users";
-import { admitTurn, transitionRun } from "./runs";
+import { admitTurn, admitRetry, transitionRun } from "./runs";
 import { listMessages } from "./messages";
-import { listChats, getOwnedChat } from "./chats";
+import { listChats, getOwnedChat, updateChat, deleteChat, createChat, MAX_PINNED } from "./chats";
 import { settleToolCharge, reserveProviderSpend, adjustProviderSpend } from "./credits";
 import { finishInvocation, inFlightProviderCalls, markDispatching, markRunning, upsertInvocation } from "./tools";
 import { reserveFileRefs } from "./attachments";
@@ -280,5 +280,202 @@ describe("waitpoints", () => {
     const { user, chat } = await seedUserWithChat("user_plan");
     const run = await admitTurn({ userId: user.id, chatId: chat.id, clientMessageId: randomUUID(), text: "x", planMode: true });
     expect((await prisma.agentRun.findUniqueOrThrow({ where: { id: run.runId } })).planMode).toBe(true);
+  });
+});
+
+describe("chat management", () => {
+  const list = (userId: string, q: object = {}) => listChats(userId, { limit: 30, ...q });
+  const titles = async (userId: string, q: object = {}) => (await list(userId, q)).items.map((c) => c.title);
+
+  it("pinned chats are listed separately and leave the recent list; unpinning brings them back", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const other = await createChat(user.id, "other");
+    await updateChat(user.id, chat.id, { pinned: true });
+    expect(await titles(user.id, { pinned: "true" })).toEqual(["New chat"]);
+    expect(await titles(user.id)).toEqual(["other"]);
+    await updateChat(user.id, chat.id, { pinned: false });
+    expect((await titles(user.id)).sort()).toEqual(["New chat", "other"]);
+    expect(other.pinned).toBe(false);
+  });
+
+  it("pinning or renaming does not change the activity time, so the recent order stays", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const before = (await getOwnedChat(user.id, chat.id)).updatedAt.getTime();
+    await new Promise((r) => setTimeout(r, 20));
+    const renamed = await updateChat(user.id, chat.id, { title: "  My tiger  " });
+    expect(renamed.title).toBe("My tiger");
+    expect(new Date(renamed.updatedAt).getTime()).toBe(before);
+  });
+
+  it("search matches titles case-insensitively across pinned and unpinned, and treats % and _ as text", async () => {
+    const { user } = await seedUserWithChat();
+    const a = await createChat(user.id, "Tiger in the jungle");
+    await createChat(user.id, "sale 50% off");
+    await createChat(user.id, "snake_case names");
+    await updateChat(user.id, a.id, { pinned: true });
+    expect(await titles(user.id, { q: "TIGER" })).toEqual(["Tiger in the jungle"]);
+    expect(await titles(user.id, { q: "50%" })).toEqual(["sale 50% off"]);
+    expect(await titles(user.id, { q: "e_c" })).toEqual(["snake_case names"]);
+    expect(await titles(user.id, { q: "%%" })).toEqual([]);
+    expect(await titles(user.id, { q: "nothing" })).toEqual([]);
+  });
+
+  it("one user's chats never show in another's list or search, and cannot be changed or deleted", async () => {
+    const { user, chat } = await seedUserWithChat("user_a");
+    const stranger = await ensureUser("user_b", 0n);
+    expect(await titles(stranger.id, { q: "New" })).toEqual([]);
+    await expect(updateChat(stranger.id, chat.id, { pinned: true })).rejects.toMatchObject({ code: "not_found" });
+    await expect(deleteChat(stranger.id, chat.id)).rejects.toMatchObject({ code: "not_found" });
+    expect((await getOwnedChat(user.id, chat.id)).pinned).toBe(false);
+  });
+
+  it("delete hides the chat from lists, search and lookups but keeps its rows", async () => {
+    const { user, chat } = await seedUserWithChat();
+    await updateChat(user.id, chat.id, { pinned: true });
+    await deleteChat(user.id, chat.id);
+    expect(await titles(user.id)).toEqual([]);
+    expect(await titles(user.id, { pinned: "true" })).toEqual([]);
+    expect(await titles(user.id, { q: "New" })).toEqual([]);
+    await expect(getOwnedChat(user.id, chat.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(updateChat(user.id, chat.id, { title: "x" })).rejects.toMatchObject({ code: "not_found" });
+    expect(await prisma.chat.count({ where: { id: chat.id } })).toBe(1);
+  });
+
+  it("delete is refused while a reply is running", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const run = await send(user.id, chat.id);
+    await expect(deleteChat(user.id, chat.id)).rejects.toMatchObject({ code: "run_active", details: { activeRunId: run.runId } });
+    await transitionRun(run.runId, "completed");
+    await expect(deleteChat(user.id, chat.id)).resolves.toEqual({ id: chat.id });
+  });
+
+  it("stops pinning at the limit, so no pinned chat can vanish from both lists, and allows it again after an unpin", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const others = await Promise.all(Array.from({ length: MAX_PINNED - 1 }, (_, i) => createChat(user.id, `p${i}`)));
+    await prisma.chat.updateMany({ where: { id: { in: others.map((c) => c.id) } }, data: { pinned: true } });
+    await updateChat(user.id, chat.id, { pinned: true }); // the 50th
+    const extra = await createChat(user.id, "one too many");
+    await expect(updateChat(user.id, extra.id, { pinned: true })).rejects.toMatchObject({ code: "validation_failed", message: expect.stringContaining("50") });
+    expect((await list(user.id, { pinned: "true" })).items).toHaveLength(MAX_PINNED);
+    expect(await titles(user.id)).toContain("one too many"); // still in Recent
+    await updateChat(user.id, chat.id, { pinned: false });
+    await expect(updateChat(user.id, extra.id, { pinned: true })).resolves.toMatchObject({ pinned: true });
+    await expect(updateChat(user.id, extra.id, { title: "renamed while at the limit" })).resolves.toMatchObject({ title: "renamed while at the limit" });
+  });
+
+  it("renaming a pinned chat at the limit is allowed, and pinning never moves the activity time backwards", async () => {
+    const { user, chat } = await seedUserWithChat();
+    await send(user.id, chat.id); // bumps the activity time
+    const afterSend = (await getOwnedChat(user.id, chat.id)).updatedAt.getTime();
+    await updateChat(user.id, chat.id, { pinned: true });
+    expect((await getOwnedChat(user.id, chat.id)).updatedAt.getTime()).toBe(afterSend);
+  });
+
+  it("a deleted chat gets no new message or retry, and nothing is left half-created", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const run = await send(user.id, chat.id);
+    await transitionRun(run.runId, "failed", { error: { code: "llm_unavailable", message: "x", retryable: true } });
+    await deleteChat(user.id, chat.id);
+    const before = { messages: await prisma.message.count(), runs: await prisma.agentRun.count() };
+    await expect(send(user.id, chat.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(admitRetry(user.id, run.runId)).rejects.toMatchObject({ code: "not_found" });
+    expect({ messages: await prisma.message.count(), runs: await prisma.agentRun.count() }).toEqual(before);
+  });
+
+  it("delete and a new message at the same moment never leave a running reply in a deleted chat", async () => {
+    for (let i = 0; i < 12; i++) {
+      const { user, chat } = await seedUserWithChat(`user_race_${i}`);
+      await Promise.allSettled([deleteChat(user.id, chat.id), send(user.id, chat.id)]);
+      const deleted = (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } })).deletedAt !== null;
+      const active = await prisma.agentRun.count({ where: { chatId: chat.id, status: { in: ["queued", "running", "waiting"] } } });
+      expect(deleted && active > 0).toBe(false);
+    }
+  });
+
+  it("the recent list pages without repeats", async () => {
+    const { user } = await seedUserWithChat();
+    for (let i = 0; i < 5; i++) await createChat(user.id, `chat ${i}`);
+    const first = await list(user.id, { limit: 3 });
+    const second = await list(user.id, { limit: 3, cursor: first.nextCursor ?? undefined });
+    const ids = [...first.items, ...second.items].map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(6);
+  });
+});
+
+describe("admitRetry", () => {
+  const failed = async (retryable = true, code = "llm_unavailable") => {
+    const { user, chat } = await seedUserWithChat();
+    const run = await send(user.id, chat.id);
+    await transitionRun(run.runId, "failed", { error: { code, message: "It stopped.", retryable } });
+    return { user, chat, run };
+  };
+
+  it("creates a new run for the same user message, and asking twice returns the same one", async () => {
+    const { user, run } = await failed();
+    const first = await admitRetry(user.id, run.runId);
+    const second = await admitRetry(user.id, run.runId);
+    expect(first.replay).toBe(false);
+    expect(first.messageId).toBe(run.messageId);
+    expect(second).toMatchObject({ runId: first.runId, replay: true });
+    const created = await prisma.agentRun.findUniqueOrThrow({ where: { id: first.runId } });
+    expect(created).toMatchObject({ retryOfRunId: run.runId, userMessageId: run.messageId, status: "queued" });
+    expect(await prisma.agentRun.count()).toBe(2);
+  });
+
+  it("two retries at the same moment create exactly one run", async () => {
+    const { user, run } = await failed();
+    const results = await Promise.all([admitRetry(user.id, run.runId), admitRetry(user.id, run.runId)]);
+    expect(new Set(results.map((r) => r.runId)).size).toBe(1);
+    expect(await prisma.agentRun.count()).toBe(2);
+  });
+
+  it("a stopped reply can be retried, and plan mode carries over", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const run = await admitTurn({ userId: user.id, chatId: chat.id, clientMessageId: randomUUID(), text: "x", planMode: true });
+    await transitionRun(run.runId, "cancelled", { error: { code: "cancelled", message: "Stopped.", retryable: true } });
+    const retry = await admitRetry(user.id, run.runId);
+    expect((await prisma.agentRun.findUniqueOrThrow({ where: { id: retry.runId } })).planMode).toBe(true);
+  });
+
+  it("refuses a reply that did not fail, and a failure that trying again cannot fix", async () => {
+    const done = await failed();
+    await prisma.agentRun.update({ where: { id: done.run.runId }, data: { status: "completed" } });
+    await expect(admitRetry(done.user.id, done.run.runId)).rejects.toMatchObject({ code: "run_not_retryable" });
+
+    const poor = await failed(false, "insufficient_credits");
+    await expect(admitRetry(poor.user.id, poor.run.runId)).rejects.toMatchObject({ code: "run_not_retryable", message: expect.stringContaining("out of credits") });
+  });
+
+  it("refuses when it is not the newest reply", async () => {
+    const { user, chat, run } = await failed();
+    const later = await send(user.id, chat.id);
+    await transitionRun(later.runId, "completed");
+    await expect(admitRetry(user.id, run.runId)).rejects.toMatchObject({ code: "run_not_retryable", message: expect.stringContaining("latest") });
+  });
+
+  it("refuses while a Magica job from the stopped run is still finishing, then allows it once done", async () => {
+    const { user, run } = await failed();
+    const inv = await upsertInvocation({ runId: run.runId, toolCallId: "0:c1", seq: 0, name: "gpt_image_2", input: {}, estimateMicro: 7_644n });
+    await markDispatching(inv.id);
+    await markRunning(inv.id, "magica_run_1");
+    await expect(admitRetry(user.id, run.runId)).rejects.toMatchObject({ code: "run_not_retryable", message: expect.stringContaining("still finishing") });
+    await finishInvocation(inv.id, { status: "completed", output: {}, creditsMicro: 7_644n });
+    await expect(admitRetry(user.id, run.runId)).resolves.toMatchObject({ replay: false });
+  });
+
+  it("someone else's run is not found", async () => {
+    const { run } = await failed();
+    const stranger = await ensureUser("user_stranger", 0n);
+    await expect(admitRetry(stranger.id, run.runId)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("resending the original message still returns the first run, not the retry", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const id = randomUUID();
+    const first = await send(user.id, chat.id, id);
+    await transitionRun(first.runId, "failed", { error: { code: "llm_unavailable", message: "x", retryable: true } });
+    await admitRetry(user.id, first.runId);
+    expect((await send(user.id, chat.id, id)).runId).toBe(first.runId);
   });
 });

@@ -5,7 +5,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   if (!origin || origin !== process.env.FRONTEND_ORIGIN) return {};
   return {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "access-control-allow-headers": "authorization, content-type, x-request-id",
     "access-control-expose-headers": "x-trace-id, retry-after",
     "access-control-max-age": "600",

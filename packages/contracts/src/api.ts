@@ -17,6 +17,20 @@ export const PageQuery = z.object({
 export type PageQuery = z.infer<typeof PageQuery>;
 export const page = <T extends z.ZodType>(item: T) => z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 
+/** Chat list: `q` searches titles across all chats; otherwise `pinned=true` lists pinned chats and the default lists the rest. */
+export const ChatListQuery = PageQuery.extend({
+  q: z.string().trim().min(2).max(100).optional(),
+  pinned: z.enum(["true", "false"]).optional(),
+});
+export type ChatListQuery = z.infer<typeof ChatListQuery>;
+
+export const UpdateChatBody = z
+  .object({ pinned: z.boolean().optional(), title: z.string().trim().min(1).max(120).optional() })
+  .refine((b) => b.pinned !== undefined || b.title !== undefined, { message: "Send pinned or title." });
+export type UpdateChatBody = z.infer<typeof UpdateChatBody>;
+
+export const DeleteChatResponse = z.object({ id });
+
 export const Credits = z.object({ balanceMicro: microString, formatted: z.string() });
 
 export const MeResponse = z.object({

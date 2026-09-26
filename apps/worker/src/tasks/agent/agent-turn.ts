@@ -66,11 +66,13 @@ export const agentTurn = task({
 
     try {
       const skills = getSkills(); // also installs the skill tools, so it runs before toolSpecs()
+      const retryNote = await retryNoteFor(run.retryOfRunId);
       const outcome = await runAgentTurn({
         llm: getLlm(),
         toolSpecs: toolSpecs(),
         skills: skillIndex(skills),
         planMode: run.planMode,
+        retryNote,
         tools: toolPorts(run, meta, log),
         maxSteps: env.AGENT_MAX_STEPS,
         signal,
@@ -122,6 +124,14 @@ export const agentTurn = task({
     if (run && !isTerminalRun(run.status)) await transitionRun(run.id, "failed", { error: readError(run) ?? INTERNAL });
   },
 });
+
+/** On a retry: tell the model the last try stopped, so it continues instead of starting over and paying again. */
+async function retryNoteFor(previousRunId: string | null): Promise<string | undefined> {
+  if (!previousRunId) return undefined;
+  const previous = await loadRun(previousRunId);
+  const reason = previous ? readError(previous)?.message : undefined;
+  return `The previous reply stopped${reason ? ` (${reason})` : ""}. Continue the task. Reuse any results already shown above, and do not repeat paid steps that already completed.`;
+}
 
 function toolPorts(run: { id: string; userId: string; chatId: string; planMode: boolean }, meta: MetaWriter, log: Logger): ToolPorts {
   const ask = createAsk(run.id, meta, log);

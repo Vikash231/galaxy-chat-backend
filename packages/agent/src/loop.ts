@@ -42,6 +42,8 @@ export interface TurnPorts {
   skills?: string[];
   /** Plan mode: the system prompt asks for a plan first (the executor enforces it). */
   planMode?: boolean;
+  /** Set on a retry: one line for the model (not saved) saying the last try stopped and what not to repeat. */
+  retryNote?: string;
   signal?: AbortSignal;
   history(): Promise<StoredMessage[]>;
   emit(part: StreamPart): void;
@@ -59,6 +61,7 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
   const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(p.skills, p.planMode) }, ...toLlmMessages(history)];
+  if (p.retryNote) messages.push({ role: "user", content: p.retryNote });
 
   for (let step = 0; step < p.maxSteps; step++) {
     p.meta({ status: "thinking", step, label: undefined });

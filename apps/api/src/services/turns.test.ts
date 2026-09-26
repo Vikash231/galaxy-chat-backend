@@ -13,7 +13,7 @@ vi.mock("./realtime", () => rt);
 import { ensureUser, markDispatching, markRunning, prisma, saveCancelledMessage, upsertAssistantMessage, upsertInvocation } from "@gx/db";
 import { resetDb, seedUserWithChat } from "@gx/db/testing";
 import { logger } from "@gx/observability";
-import { sendTurn, stopTurn, watchTurn } from "./turns";
+import { retryTurn, sendTurn, stopTurn, watchTurn } from "./turns";
 
 beforeEach(async () => (await resetDb(), vi.clearAllMocks()));
 afterAll(() => prisma.$disconnect());
@@ -174,5 +174,51 @@ describe("watchTurn (recovering runs the worker could not close)", () => {
     await prisma.agentRun.update({ where: { id: runId }, data: { status: "completed" } });
     await expect(watchTurn(user, runId, logger)).rejects.toMatchObject({ code: "run_finished" });
     expect(rt.triggerRunEnded).not.toHaveBeenCalled();
+  });
+});
+
+describe("retryTurn", () => {
+  const failedTurn = async () => {
+    const { user, chat } = await seedUserWithChat();
+    const sent = await sendTurn(user, chat.id, body(), logger);
+    await prisma.agentRun.update({ where: { id: sent.data.runId }, data: { status: "failed", errorCode: "llm_unavailable", errorMessage: "Busy.", errorRetryable: true } });
+    rt.dispatchTurn.mockClear();
+    return { user, chat, runId: sent.data.runId };
+  };
+
+  it("starts a new run for the same message and returns realtime access; asking again returns that run without a second dispatch", async () => {
+    const { user, chat, runId } = await failedTurn();
+    const first = await retryTurn(user, runId, logger);
+    const again = await retryTurn(user, runId, logger);
+
+    expect(first.status).toBe(202);
+    expect(first.data.runId).not.toBe(runId);
+    expect(first.data.chatId).toBe(chat.id);
+    expect(first.data.realtime.triggerRunId).toBe(`trig_${first.data.runId}`);
+    expect(again.status).toBe(200);
+    expect(again.data.runId).toBe(first.data.runId);
+    expect(rt.dispatchTurn).toHaveBeenCalledOnce();
+  });
+
+  it("a refused retry dispatches nothing", async () => {
+    const { user, runId } = await failedTurn();
+    await prisma.agentRun.update({ where: { id: runId }, data: { errorRetryable: false, errorCode: "insufficient_credits" } });
+    await expect(retryTurn(user, runId, logger)).rejects.toMatchObject({ code: "run_not_retryable" });
+    expect(rt.dispatchTurn).not.toHaveBeenCalled();
+  });
+
+  it("a failed dispatch marks the retry failed and frees the chat, and the retry can be tried again", async () => {
+    const { user, chat, runId } = await failedTurn();
+    rt.dispatchTurn.mockRejectedValueOnce(new Error("trigger down"));
+    await expect(retryTurn(user, runId, logger)).rejects.toMatchObject({ code: "dispatch_failed" });
+    expect(await prisma.agentRun.count({ where: { chatId: chat.id, status: { in: ["queued", "running", "waiting"] } } })).toBe(0);
+  });
+
+  it("is refused for a user with no credits, and for someone else's run", async () => {
+    const { user, runId } = await failedTurn();
+    await expect(retryTurn({ ...user, balanceMicro: 0n }, runId, logger)).rejects.toMatchObject({ code: "insufficient_credits" });
+    const stranger = await ensureUser("user_stranger", 5_000_000n);
+    await expect(retryTurn(stranger, runId, logger)).rejects.toMatchObject({ code: "not_found" });
+    expect(rt.dispatchTurn).not.toHaveBeenCalled();
   });
 });

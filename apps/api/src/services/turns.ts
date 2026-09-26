@@ -1,27 +1,20 @@
 import { apiEnv } from "@gx/config";
 import { AppError, type CancelResponse, type SendMessageBody, type SendMessageResponse } from "@gx/contracts";
-import { admitTurn, attachTriggerRun, cancelRun, countRecentRuns, getOwnedChat, failStreamingReply, getOwnedRun, inFlightProviderCalls, isTerminalRun, loadRun, transitionRun, type UserRow } from "@gx/db";
+import { admitRetry, admitTurn, attachTriggerRun, cancelRun, countRecentRuns, getOwnedChat, failStreamingReply, getOwnedRun, inFlightProviderCalls, type Admitted, isTerminalRun, loadRun, transitionRun, type UserRow } from "@gx/db";
 import type { Logger } from "@gx/observability";
 import { cancelTriggerRun, dispatchTurn, mintRunToken, reconcileProviderCall, triggerRunEnded } from "./realtime";
 
 export type SendResult = { status: 200 | 202; data: SendMessageResponse };
 
-/** Persist the user turn, dispatch exactly one durable run, and hand back realtime access. */
-export async function sendTurn(user: UserRow, chatId: string, body: Omit<SendMessageBody, "planMode"> & { planMode?: boolean }, log: Logger): Promise<SendResult> {
-  const env = apiEnv();
-  await getOwnedChat(user.id, chatId);
-  if ((await countRecentRuns(user.id, 60_000)) >= env.SEND_RATE_PER_MIN)
-    throw new AppError("rate_limited", "You're sending messages too quickly. Wait a moment and try again.");
-  if (user.balanceMicro < env.MIN_ADMISSION_MICRO) throw new AppError("insufficient_credits", "You're out of credits.");
-
-  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text, attachmentIds: body.attachmentIds, planMode: body.planMode });
+/** Start the durable run for an admitted turn (once), and hand back realtime access. */
+async function dispatchAdmitted(admitted: Admitted, chatId: string, userId: string, log: Logger): Promise<SendResult> {
   let triggerRunId = admitted.triggerRunId;
 
   if (!triggerRunId) {
     const run = await loadRun(admitted.runId);
     if (run?.status !== "queued") throw new AppError("run_not_dispatched", "This message could not be sent. Send it again.");
     try {
-      triggerRunId = await dispatchTurn(admitted.runId, chatId, user.id);
+      triggerRunId = await dispatchTurn(admitted.runId, chatId, userId);
       await attachTriggerRun(admitted.runId, triggerRunId);
     } catch (e) {
       log.error({ err: e, runId: admitted.runId }, "run.dispatch_failed");
@@ -35,6 +28,30 @@ export async function sendTurn(user: UserRow, chatId: string, body: Omit<SendMes
     status: admitted.replay ? 200 : 202,
     data: { chatId, messageId: admitted.messageId, runId: admitted.runId, realtime: await mintRunToken(triggerRunId) },
   };
+}
+
+/** The limits every new run goes through: send rate and a minimum balance. */
+async function checkAdmission(user: UserRow) {
+  const env = apiEnv();
+  if ((await countRecentRuns(user.id, 60_000)) >= env.SEND_RATE_PER_MIN)
+    throw new AppError("rate_limited", "You're sending messages too quickly. Wait a moment and try again.");
+  if (user.balanceMicro < env.MIN_ADMISSION_MICRO) throw new AppError("insufficient_credits", "You're out of credits.");
+}
+
+/** Persist the user turn, dispatch exactly one durable run, and hand back realtime access. */
+export async function sendTurn(user: UserRow, chatId: string, body: Omit<SendMessageBody, "planMode"> & { planMode?: boolean }, log: Logger): Promise<SendResult> {
+  await getOwnedChat(user.id, chatId);
+  await checkAdmission(user);
+  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text, attachmentIds: body.attachmentIds, planMode: body.planMode });
+  return dispatchAdmitted(admitted, chatId, user.id, log);
+}
+
+/** Run a failed or stopped reply again for the same message. Asking twice returns the same retry. */
+export async function retryTurn(user: UserRow, runId: string, log: Logger): Promise<SendResult> {
+  const original = await getOwnedRun(user.id, runId);
+  await checkAdmission(user);
+  const admitted = await admitRetry(user.id, runId);
+  return dispatchAdmitted(admitted, original.chatId, user.id, log);
 }
 
 const STOPPED = { code: "cancelled", message: "You stopped this reply.", retryable: true };

@@ -4,6 +4,8 @@ import { prisma, isUniqueViolation } from "./client";
 import { errorCols, readError } from "./errors";
 import { toMessageView } from "./messages";
 import { claimAttachments } from "./attachments";
+import { getOwnedChat } from "./chats";
+import { inFlightProviderCalls } from "./tools";
 import { pendingWaitpoint, toWaitpointView } from "./waitpoints";
 
 const pendingWaitpointView = async (runId: string) => {
@@ -24,6 +26,9 @@ export type Admitted = { runId: string; messageId: string; triggerRunId: string 
 export async function admitTurn(input: AdmitInput): Promise<Admitted> {
   try {
     return await prisma.$transaction(async (tx) => {
+      // First, so a chat deleted a moment ago gets no new message or run.
+      const { count } = await tx.chat.updateMany({ where: { id: input.chatId, userId: input.userId, deletedAt: null }, data: { updatedAt: new Date() } });
+      if (count === 0) throw new AppError("not_found", "Chat not found.");
       const message = await tx.message.create({
         data: { chatId: input.chatId, role: "user", clientMessageId: input.clientMessageId, content: [] },
       });
@@ -32,7 +37,6 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
       const run = await tx.agentRun.create({
         data: { chatId: input.chatId, userId: input.userId, userMessageId: message.id, planMode: input.planMode ?? false },
       });
-      await tx.chat.update({ where: { id: input.chatId }, data: { updatedAt: new Date() } });
       return { runId: run.id, messageId: message.id, triggerRunId: null, replay: false };
     });
   } catch (e) {
@@ -40,7 +44,8 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
       const message = await prisma.message.findUniqueOrThrow({
         where: { chatId_clientMessageId: { chatId: input.chatId, clientMessageId: input.clientMessageId } },
       });
-      const run = await prisma.agentRun.findUniqueOrThrow({ where: { userMessageId: message.id } });
+      // The first run of this message (a retry shares the message but is not what a resend should return).
+      const run = await prisma.agentRun.findFirstOrThrow({ where: { userMessageId: message.id, retryOfRunId: null } });
       return { runId: run.id, messageId: message.id, triggerRunId: run.triggerRunId, replay: true };
     }
     if (isUniqueViolation(e)) {
@@ -48,6 +53,52 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
         where: { chatId: input.chatId, status: { in: [...ACTIVE_RUN_STATUSES] } },
         select: { id: true },
       });
+      throw new AppError("run_active", "A reply is still in progress in this chat.", { activeRunId: active?.id });
+    }
+    throw e;
+  }
+}
+
+const NOT_RETRYABLE_HINT: Record<string, string> = {
+  insufficient_credits: "You're out of credits. Add credits, then send your message again.",
+};
+
+/**
+ * Create a new run for the same user message after a failed or stopped reply.
+ * Refused when it could pay twice (a Magica job from the old run is still finishing), when it is not the
+ * newest reply, or when the failure cannot be fixed by trying again. Asking twice returns the same retry.
+ */
+export async function admitRetry(userId: string, runId: string): Promise<Admitted> {
+  const run = await getOwnedRun(userId, runId);
+  await getOwnedChat(userId, run.chatId);
+
+  const existing = await prisma.agentRun.findUnique({ where: { retryOfRunId: run.id } });
+  if (existing) return { runId: existing.id, messageId: run.userMessageId, triggerRunId: existing.triggerRunId, replay: true };
+
+  if (run.status !== "failed" && run.status !== "cancelled") throw new AppError("run_not_retryable", "Only a failed or stopped reply can be retried.");
+  const error = readError(run);
+  if (error && error.retryable === false)
+    throw new AppError("run_not_retryable", NOT_RETRYABLE_HINT[error.code] ?? "This failure cannot be fixed by trying again.", { code: error.code });
+  const newer = await prisma.agentRun.findFirst({ where: { chatId: run.chatId, createdAt: { gt: run.createdAt } }, select: { id: true } });
+  if (newer) throw new AppError("run_not_retryable", "Only the latest reply can be retried.");
+  if ((await inFlightProviderCalls(run.id)).length)
+    throw new AppError("run_not_retryable", "The previous image is still finishing. Try again in a minute, so it is not paid for twice.");
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const { count } = await tx.chat.updateMany({ where: { id: run.chatId, userId, deletedAt: null }, data: { updatedAt: new Date() } });
+      if (count === 0) throw new AppError("not_found", "Chat not found.");
+      const created = await tx.agentRun.create({
+        data: { chatId: run.chatId, userId, userMessageId: run.userMessageId, retryOfRunId: run.id, planMode: run.planMode },
+      });
+      return { runId: created.id, messageId: run.userMessageId, triggerRunId: null, replay: false };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      // A concurrent retry of the same run wins either unique index (its own, or one-active-run-per-chat): return it.
+      const again = await prisma.agentRun.findUnique({ where: { retryOfRunId: run.id } });
+      if (again) return { runId: again.id, messageId: run.userMessageId, triggerRunId: again.triggerRunId, replay: true };
+      const active = await prisma.agentRun.findFirst({ where: { chatId: run.chatId, status: { in: [...ACTIVE_RUN_STATUSES] } }, select: { id: true } });
       throw new AppError("run_active", "A reply is still in progress in this chat.", { activeRunId: active?.id });
     }
     throw e;

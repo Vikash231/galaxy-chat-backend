@@ -81,7 +81,7 @@ Last audited: 2026-09-25, end of Day 1.
 | Generated **image** persisted and rendered | ⚠️ | Rendered, but only Magica's URL is stored, not a copy in R2 |
 | Generated **video / audio** rendered | ❌ | |
 | Failed/cancelled turns visible | ✅ | |
-| Failed/cancelled turns **retryable** | ❌ | No retry endpoint or button |
+| Failed/cancelled turns retryable | ✅ | `POST /runs/{id}/retry` and a Retry button on the newest reply |
 
 ## 8. Required tools (Magica)
 | Requirement | Status | Notes |
@@ -92,7 +92,7 @@ Last audited: 2026-09-25, end of Day 1.
 | Agent chooses and **chains** tools | ⚠️ | Choosing works; chaining not built or tested |
 | Model discovery: free route only, record the routed model, reject paid models | ✅ | |
 | Durable UX: pending, running, completed, failed, cancelled, reload recovery | ✅ | |
-| Durable UX: **retry** | ❌ | |
+| Durable UX: retry | ✅ | Retrying the turn re-runs its tool calls; blocked while a Magica job is still finishing |
 | Acceptance: 1 success per tool + 1 chained conversation | ⚠️ | Crop only |
 | Acceptance: invalid input, 401, 429, timeout, failed run, duplicate dispatch, persistence | ✅ | Tests |
 | Acceptance: **reconnect** | ❌ | No test |
@@ -171,4 +171,4 @@ Last audited: 2026-09-25, end of Day 1.
 
 ## Totals
 Of **106** checked items: **42 ✅**, **16 ⚠️**, **48 ❌** (counted from the tables above).
-Largest missing groups: skills (6), uploads/attachments (8), approvals/waitpoints (4+), two Magica tools, chat search/pin/delete, retry, deployment and submission items, frontend tests and fidelity.
+Largest missing groups: skills (6), uploads/attachments (8), approvals/waitpoints (4+), two Magica tools, deployment and submission items, frontend tests and fidelity.

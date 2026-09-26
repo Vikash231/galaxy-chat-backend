@@ -80,6 +80,7 @@ model Chat {
   runs      AgentRun[]
 
   @@index([userId, updatedAt(sort: Desc), id(sort: Desc)])
+  @@index([userId, pinned, updatedAt(sort: Desc), id(sort: Desc)])
 }
 
 model Message {
@@ -109,7 +110,8 @@ model AgentRun {
   chat             Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   userId           String
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userMessageId    String           @unique
+  userMessageId    String // a retry runs again for the same user message
+  retryOfRunId     String?          @unique // a run can be retried once; a second request returns the same retry
   status           RunStatus        @default(queued)
   triggerRunId     String?          @unique
   steps            Int              @default(0)
@@ -131,6 +133,7 @@ model AgentRun {
 
   @@index([chatId, createdAt])
   @@index([userId, createdAt])
+  @@index([userMessageId])
 }
 
 model ToolInvocation {
