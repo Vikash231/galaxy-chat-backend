@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AnswerWaitpointResponse,
   CancelResponse,
   CompleteUploadBody,
   CompleteUploadResponse,
@@ -20,6 +21,8 @@ import {
   SendMessageBody,
   SendMessageResponse,
   StreamPart,
+  WaitpointAnswer,
+  WaitpointParams,
   page,
 } from "@gx/contracts";
 
@@ -48,6 +51,7 @@ const OPS: Op[] = [
   { method: "get", path: "/api/v1/runs/{runId}", summary: "Run status, tool calls and the assistant message", params: RunParams, ok: [200, RunView], errors: [401, 404] },
   { method: "post", path: "/api/v1/runs/{runId}/token", summary: "Mint a realtime read token for one run", params: RunParams, ok: [200, RealtimeAccess], errors: [401, 404, 409] },
   { method: "post", path: "/api/v1/runs/{runId}/cancel", summary: "Stop an active run", params: RunParams, ok: [202, CancelResponse], errors: [401, 404] },
+  { method: "post", path: "/api/v1/waitpoints/{waitpointId}/answer", summary: "Answer a question the agent is waiting on (option, file, plan or cost approval)", params: WaitpointParams, body: WaitpointAnswer, ok: [200, AnswerWaitpointResponse], errors: [401, 404, 409, 422, 503] },
 ];
 
 // Requests are described by what the client may send (defaults optional); responses by what the server returns.

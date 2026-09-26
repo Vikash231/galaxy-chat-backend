@@ -10,6 +10,9 @@ import { settleToolCharge, reserveProviderSpend, adjustProviderSpend } from "./c
 import { finishInvocation, inFlightProviderCalls, markDispatching, markRunning, upsertInvocation } from "./tools";
 import { reserveFileRefs } from "./attachments";
 import { recordRunSkill } from "./skills";
+import { answerWaitpoint, approvedCapMicro, expireWaitpoint, getOwnedWaitpoint, pendingWaitpoint, spentEstimateMicro, upsertWaitpoint } from "./waitpoints";
+import { cancelRun, getRunView } from "./runs";
+import { getChatDetail } from "./chats";
 import { resetDb, seedUserWithChat } from "./testing";
 
 beforeEach(resetDb);
@@ -179,5 +182,103 @@ describe("in-flight provider calls", () => {
     await finishInvocation(done.id, { status: "completed", creditsMicro: 5_000n });
     // claimed has no Magica run id: its outcome is unknown, and it is never re-dispatched.
     expect(await inFlightProviderCalls(runId)).toEqual([{ id: accepted.id }]);
+  });
+});
+
+describe("waitpoints", () => {
+  const options = { kind: "options" as const, question: "Which?", options: ["A", "B"] };
+  const soon = () => new Date(Date.now() + 60_000);
+  async function pending(request: Parameters<typeof upsertWaitpoint>[0]["request"] = options, key = "0:c1") {
+    const { user, chat } = await seedUserWithChat();
+    const run = await send(user.id, chat.id);
+    const wp = await upsertWaitpoint({ runId: run.runId, key, request, expiresAt: soon() });
+    return { user, chat, run, wp };
+  }
+
+  it("asking the same question again returns the same row", async () => {
+    const { run, wp } = await pending();
+    const again = await upsertWaitpoint({ runId: run.runId, key: "0:c1", request: options, expiresAt: soon() });
+    expect(again.id).toBe(wp.id);
+    expect(await prisma.waitpoint.count()).toBe(1);
+  });
+
+  it("the first answer wins; the same answer again is a duplicate; a different one is refused", async () => {
+    const { user, wp } = await pending();
+    expect((await answerWaitpoint(user.id, wp.id, { choice: "A" })).result).toBe("answered");
+    expect((await answerWaitpoint(user.id, wp.id, { choice: "A" })).result).toBe("duplicate");
+    await expect(answerWaitpoint(user.id, wp.id, { choice: "B" })).rejects.toMatchObject({ code: "waitpoint_closed" });
+    expect((await prisma.waitpoint.findUniqueOrThrow({ where: { id: wp.id } })).answer).toEqual({ choice: "A" });
+  });
+
+  it("two answers at the same moment: exactly one is recorded", async () => {
+    const { user, wp } = await pending();
+    const r = await Promise.allSettled([answerWaitpoint(user.id, wp.id, { choice: "A" }), answerWaitpoint(user.id, wp.id, { choice: "B" })]);
+    expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    expect(r.filter((x) => x.status === "rejected")).toHaveLength(1);
+  });
+
+  it("refuses an answer after expiry, after a stop, and from another user", async () => {
+    const { user, run, wp } = await pending();
+    await prisma.waitpoint.update({ where: { id: wp.id }, data: { expiresAt: new Date(Date.now() - 1_000) } });
+    await expect(answerWaitpoint(user.id, wp.id, { choice: "A" })).rejects.toMatchObject({ code: "waitpoint_closed" });
+
+    const other = await pending(options, "0:c9");
+    await cancelRun(other.run.runId, { code: "cancelled", message: "stopped", retryable: true });
+    await expect(answerWaitpoint(other.user.id, other.wp.id, { choice: "A" })).rejects.toMatchObject({ code: "waitpoint_closed" });
+
+    const stranger = await ensureUser("user_stranger", 0n);
+    await expect(answerWaitpoint(stranger.id, wp.id, { choice: "A" })).rejects.toBeInstanceOf(AppError);
+    await expect(getOwnedWaitpoint(stranger.id, wp.id)).rejects.toMatchObject({ code: "not_found" });
+    expect(run.runId).toBeTruthy();
+  });
+
+  it("expiring only affects a still-pending question", async () => {
+    const { user, wp } = await pending();
+    await answerWaitpoint(user.id, wp.id, { choice: "A" });
+    expect(await expireWaitpoint(wp.id)).toBe(false);
+    const second = await pending(options, "0:c2");
+    expect(await expireWaitpoint(second.wp.id)).toBe(true);
+    expect(await pendingWaitpoint(second.run.runId)).toBeNull();
+  });
+
+  it("a stop cancels the run's pending questions", async () => {
+    const { run, wp } = await pending();
+    await cancelRun(run.runId, { code: "cancelled", message: "stopped", retryable: true });
+    expect((await prisma.waitpoint.findUniqueOrThrow({ where: { id: wp.id } })).status).toBe("cancelled");
+  });
+
+  it("the approved cap is the biggest approved plan or cost, and only approvals count", async () => {
+    const { user, run } = await pending();
+    expect(await approvedCapMicro(run.runId)).toBeNull();
+    const plan = await upsertWaitpoint({ runId: run.runId, key: "0:p", request: { kind: "plan", summary: "s", steps: [{ text: "t" }], estimateMicro: 12_000 }, expiresAt: soon() });
+    await answerWaitpoint(user.id, plan.id, { approve: true });
+    const credit = await upsertWaitpoint({ runId: run.runId, key: "credit:1", request: { kind: "credit", tools: [{ name: "x", estimateMicro: 1 }], stepMicro: 1, totalMicro: 30_000 }, expiresAt: soon() });
+    await answerWaitpoint(user.id, credit.id, { approve: false });
+    expect(await approvedCapMicro(run.runId)).toBe(12_000n);
+    const credit2 = await upsertWaitpoint({ runId: run.runId, key: "credit:2", request: { kind: "credit", tools: [{ name: "x", estimateMicro: 1 }], stepMicro: 1, totalMicro: 40_000 }, expiresAt: soon() });
+    await answerWaitpoint(user.id, credit2.id, { approve: true });
+    expect(await approvedCapMicro(run.runId)).toBe(40_000n);
+  });
+
+  it("spent estimate sums the run's tool calls", async () => {
+    const { run } = await pending();
+    await upsertInvocation({ runId: run.runId, toolCallId: "a", seq: 0, name: "crop_image", input: {}, estimateMicro: 5_000n });
+    await upsertInvocation({ runId: run.runId, toolCallId: "b", seq: 1, name: "gpt_image_2", input: {}, estimateMicro: 7_644n });
+    expect(await spentEstimateMicro(run.runId)).toBe(12_644n);
+  });
+
+  it("the pending question shows in the chat detail and run view until it is answered", async () => {
+    const { user, chat, run, wp } = await pending();
+    expect((await getChatDetail(user.id, chat.id)).activeRun?.waitpoint).toMatchObject({ id: wp.id, kind: "options" });
+    expect((await getRunView(user.id, run.runId)).waitpoint).toMatchObject({ id: wp.id });
+    await answerWaitpoint(user.id, wp.id, { choice: "A" });
+    expect((await getChatDetail(user.id, chat.id)).activeRun?.waitpoint).toBeNull();
+    expect((await getRunView(user.id, run.runId)).waitpoint).toBeNull();
+  });
+
+  it("plan mode is saved on the run", async () => {
+    const { user, chat } = await seedUserWithChat("user_plan");
+    const run = await admitTurn({ userId: user.id, chatId: chat.id, clientMessageId: randomUUID(), text: "x", planMode: true });
+    expect((await prisma.agentRun.findUniqueOrThrow({ where: { id: run.runId } })).planMode).toBe(true);
   });
 });

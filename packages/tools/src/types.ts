@@ -1,10 +1,17 @@
 import type { z } from "zod";
+import type { WaitpointAnswer, WaitpointRequest } from "@gx/contracts";
 
 export type FileKind = "image" | "video" | "audio";
 export type Asset = { kind: FileKind; url: string; durationSec?: number };
 
 /** What a tool may know about its input files when estimating cost. */
 export type FileFacts = { durationSec(url: string): number | undefined };
+
+/** How a question to the user ended. */
+export type AskResult = { status: "answered"; answer: WaitpointAnswer } | { status: "expired" } | { status: "cancelled" };
+
+/** The chat's files as tool calls see them: names to URLs, uploaded-name aliases, known lengths. */
+export type FileLookup = { files: ReadonlyMap<string, string>; aliases: ReadonlyMap<string, string>; durations: ReadonlyMap<string, number> };
 
 /** One agent tool: its LLM-facing contract plus how to execute it. Adding a tool never touches orchestration. */
 export interface ToolDef<A extends z.ZodObject = z.ZodObject, O = unknown> {
@@ -21,6 +28,10 @@ export interface ToolDef<A extends z.ZodObject = z.ZodObject, O = unknown> {
   estimateMicro: (args: z.infer<A>, files: FileFacts) => bigint;
   assets: (output: O) => Asset[];
   exec: MagicaExec<A, O> | LocalExec<A, O>;
+  /** Asks the user something; when it shares a step with other calls, only it runs and the rest wait. */
+  interactive?: boolean;
+  /** A note that ends the turn right after this tool (e.g. the user declined or never answered), or undefined to go on. */
+  endsTurn?: (output: O) => string | undefined;
 }
 
 /** Runs as a Magica model through the magica-run child task; billed. */
@@ -33,7 +44,12 @@ export type MagicaExec<A extends z.ZodObject, O> = {
 };
 
 /** What in-process tools may use from the running turn. */
-export type LocalCtx = { recordSkill(name: string, contentHash: string, content: string): Promise<{ contentHash: string; content: string; first: boolean }> };
+export type LocalCtx = {
+  recordSkill(name: string, contentHash: string, content: string): Promise<{ contentHash: string; content: string; first: boolean }>;
+  /** Pause the run until the user answers (or the question expires). */
+  ask(request: WaitpointRequest): Promise<AskResult>;
+  files: FileLookup;
+};
 
 /** Runs inside the agent worker (e.g. reading skills); free. */
 export type LocalExec<A extends z.ZodObject, O> = { kind: "local"; run: (args: z.infer<A>, ctx: LocalCtx) => Promise<O> };
@@ -46,3 +62,13 @@ export class ToolRunError extends Error {}
 // Variance on the generic makes a heterogeneous registry awkward; the registry erases it once, here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = ToolDef<any, any>;
+
+export type ParsedArgsResult = { ok: true; args: unknown } | { ok: false; message: string };
+/** The registry's argument parser, handed to tools that need to check other tools' arguments. */
+export type ParsedArgsFn = (
+  tool: AnyTool,
+  rawJson: string,
+  files: ReadonlyMap<string, string>,
+  aliases: ReadonlyMap<string, string>,
+  opts?: { lenient?: boolean },
+) => ParsedArgsResult;

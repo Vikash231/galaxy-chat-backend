@@ -1,5 +1,5 @@
 import { workerEnv } from "@gx/config";
-import { createOpenRouterProvider, type LlmProvider } from "@gx/llm";
+import { createOpenRouterProvider, createScriptedProvider, type LlmProvider } from "@gx/llm";
 import { createMagicaClient, type MagicaClient } from "@gx/magica";
 import { logger } from "@gx/observability";
 import { loadSkills, type SkillSet } from "@gx/skills";
@@ -10,8 +10,12 @@ import { resolve } from "node:path";
 let llm: LlmProvider | undefined;
 let magica: MagicaClient | undefined;
 
+// LLM_FIXTURE=scripted swaps the model for a local script (see @gx/llm scripted); only for trying flows without a model.
 export const getLlm = () =>
-  (llm ??= createOpenRouterProvider({ apiKey: workerEnv().OPENROUTER_API_KEY, baseURL: workerEnv().OPENROUTER_BASE_URL, model: workerEnv().OPENROUTER_MODEL }));
+  (llm ??=
+    process.env.LLM_FIXTURE === "scripted"
+      ? createScriptedProvider()
+      : createOpenRouterProvider({ apiKey: workerEnv().OPENROUTER_API_KEY, baseURL: workerEnv().OPENROUTER_BASE_URL, model: workerEnv().OPENROUTER_MODEL }));
 
 export const getMagica = () =>
   (magica ??= createMagicaClient({ apiKey: workerEnv().MAGICA_API_KEY, baseUrl: workerEnv().MAGICA_BASE_URL, mode: workerEnv().MAGICA_MODE }));

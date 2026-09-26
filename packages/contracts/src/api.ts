@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ContentBlock, SafeError } from "./content";
 import { ToolStatus } from "./realtime";
+import { WaitpointView } from "./waitpoints";
 
 const iso = z.string().datetime();
 const id = z.string().min(1).max(64);
@@ -33,7 +34,7 @@ export const ACTIVE_RUN_STATUSES = ["queued", "running", "waiting"] as const sat
 
 export const ChatDetail = z.object({
   chat: ChatView,
-  activeRun: z.object({ runId: id, status: RunStatus }).nullable(),
+  activeRun: z.object({ runId: id, status: RunStatus, waitpoint: WaitpointView.nullable() }).nullable(),
 });
 
 export const MessageView = z.object({
@@ -54,6 +55,8 @@ export const SendMessageBody = z.object({
   clientMessageId: z.string().uuid(),
   text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
   attachmentIds: z.array(id).max(MAX_ATTACHMENTS).default([]),
+  // Plan mode: the agent must get a plan approved before any paid tool runs.
+  planMode: z.boolean().default(false),
 });
 export type SendMessageBody = z.infer<typeof SendMessageBody>;
 
@@ -88,6 +91,7 @@ export const RunView = z.object({
   }),
   tools: z.array(ToolInvocationView),
   assistantMessage: MessageView.nullable(),
+  waitpoint: WaitpointView.nullable(),
 });
 export type RunView = z.infer<typeof RunView>;
 

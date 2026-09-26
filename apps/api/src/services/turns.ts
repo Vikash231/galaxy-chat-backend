@@ -7,14 +7,14 @@ import { cancelTriggerRun, dispatchTurn, mintRunToken, reconcileProviderCall, tr
 export type SendResult = { status: 200 | 202; data: SendMessageResponse };
 
 /** Persist the user turn, dispatch exactly one durable run, and hand back realtime access. */
-export async function sendTurn(user: UserRow, chatId: string, body: SendMessageBody, log: Logger): Promise<SendResult> {
+export async function sendTurn(user: UserRow, chatId: string, body: Omit<SendMessageBody, "planMode"> & { planMode?: boolean }, log: Logger): Promise<SendResult> {
   const env = apiEnv();
   await getOwnedChat(user.id, chatId);
   if ((await countRecentRuns(user.id, 60_000)) >= env.SEND_RATE_PER_MIN)
     throw new AppError("rate_limited", "You're sending messages too quickly. Wait a moment and try again.");
   if (user.balanceMicro < env.MIN_ADMISSION_MICRO) throw new AppError("insufficient_credits", "You're out of credits.");
 
-  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text, attachmentIds: body.attachmentIds });
+  const admitted = await admitTurn({ userId: user.id, chatId, clientMessageId: body.clientMessageId, text: body.text, attachmentIds: body.attachmentIds, planMode: body.planMode });
   let triggerRunId = admitted.triggerRunId;
 
   if (!triggerRunId) {

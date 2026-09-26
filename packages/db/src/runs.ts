@@ -4,11 +4,17 @@ import { prisma, isUniqueViolation } from "./client";
 import { errorCols, readError } from "./errors";
 import { toMessageView } from "./messages";
 import { claimAttachments } from "./attachments";
+import { pendingWaitpoint, toWaitpointView } from "./waitpoints";
+
+const pendingWaitpointView = async (runId: string) => {
+  const w = await pendingWaitpoint(runId);
+  return w ? toWaitpointView(w) : null;
+};
 
 const TERMINAL: RunStatus[] = ["completed", "failed", "cancelled"];
 export const isTerminalRun = (s: RunStatus) => TERMINAL.includes(s);
 
-export type AdmitInput = { userId: string; chatId: string; clientMessageId: string; text: string; attachmentIds?: string[] };
+export type AdmitInput = { userId: string; chatId: string; clientMessageId: string; text: string; attachmentIds?: string[]; planMode?: boolean };
 export type Admitted = { runId: string; messageId: string; triggerRunId: string | null; replay: boolean };
 
 /**
@@ -24,7 +30,7 @@ export async function admitTurn(input: AdmitInput): Promise<Admitted> {
       const attached = await claimAttachments(tx, input.userId, input.chatId, message.id, input.attachmentIds ?? []);
       await tx.message.update({ where: { id: message.id }, data: { content: [...attached, { type: "text", text: input.text }] as Prisma.InputJsonValue } });
       const run = await tx.agentRun.create({
-        data: { chatId: input.chatId, userId: input.userId, userMessageId: message.id },
+        data: { chatId: input.chatId, userId: input.userId, userMessageId: message.id, planMode: input.planMode ?? false },
       });
       await tx.chat.update({ where: { id: input.chatId }, data: { updatedAt: new Date() } });
       return { runId: run.id, messageId: message.id, triggerRunId: null, replay: false };
@@ -107,6 +113,7 @@ export async function getRunView(userId: string, runId: string): Promise<RunView
       createdAt: run.createdAt.toISOString(),
       finishedAt: run.finishedAt?.toISOString() ?? null,
     },
+    waitpoint: await pendingWaitpointView(run.id),
     tools: run.tools.map((t) => ({
       toolCallId: t.toolCallId,
       seq: t.seq,
@@ -143,6 +150,7 @@ export async function cancelRun(runId: string, error: SafeError): Promise<boolea
       data: { status: "cancelled", finishedAt: new Date(), ...errorCols(error) },
     });
     await tx.message.updateMany({ where: { runId, status: "streaming" }, data: { status: "cancelled", ...errorCols(error) } });
+    await tx.waitpoint.updateMany({ where: { runId, status: "pending" }, data: { status: "cancelled" } });
     return count === 1;
   });
 }

@@ -9,3 +9,4 @@ export * from "./tools";
 export * from "./credits";
 export * from "./attachments";
 export * from "./skills";
+export * from "./waitpoints";

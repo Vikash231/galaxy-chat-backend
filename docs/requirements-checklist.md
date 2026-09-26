@@ -32,11 +32,11 @@ Last audited: 2026-09-25, end of Day 1.
 | Prisma schema + committed migrations | ✅ | |
 | Forward/rollback notes + compatibility assumptions | ❌ | |
 | FKs for Chat, Message, AgentRun, ToolInvocation, CreditLedger | ✅ | |
-| FKs for **Attachment, RunSkill, Waitpoint** | ❌ | These tables don't exist yet, because their features aren't built |
+| FKs for Attachment, RunSkill, Waitpoint | ✅ | All three tables exist with foreign keys |
 | Cursor pagination, composite indexes, no unbounded scans | ✅ | |
 | Transactions for message/run creation and settlement | ✅ | |
 | Unique idempotency keys: dispatch, tool completion, charges | ✅ | |
-| Unique idempotency keys: **approvals** | ❌ | No approvals yet |
+| Unique idempotency keys: approvals | ✅ | `Waitpoint` is unique on `(runId, key)`; the token key is `waitpoint:<id>` |
 
 ## 4. Contract-driven frontend + backend
 | Requirement | Status | Notes |
@@ -63,7 +63,7 @@ Last audited: 2026-09-25, end of Day 1.
 | Shell: navigation, message list, pinned composer | ✅ | Not yet seen in a browser |
 | **Artifact panel** | ❌ | |
 | Composer: multiline, send, stop | ✅ | |
-| Composer: **OpenRouter Free status, attachments, media picker, plan mode, interrupt** | ❌ | |
+| Composer: **OpenRouter Free status, attachments, media picker**, plan mode, interrupt | ⚠️ | Attachments, plan-mode toggle and interrupt are built; the free-model status and media picker are not |
 | Accessibility: keyboard, focus, screen-reader labels, error recovery | ⚠️ | Labels and keyboard sending done; no full pass yet |
 | Responsive: mobile keeps the same controls | ❌ | The sidebar is hidden on mobile and there's no mobile navigation |
 | Matches the reference product exactly | ❌ | Not started |
@@ -150,16 +150,16 @@ Last audited: 2026-09-25, end of Day 1.
 | Attachment over limits | ❌ |
 | Credits run out mid-turn → stop safely | ✅ |
 | REST/realtime errors → backoff, token refresh, REST reconciliation | ⚠️ |
-| **Unanswered waitpoint → expire, clear overlay** | ❌ |
+| Unanswered waitpoint → expire, clear overlay | ✅ |
 | Every failure explainable from the UI (including a **retry path**) | ⚠️ |
-| Structured logs with ids | ⚠️ (`processId`, `waitpointTokenId` missing) |
+| Structured logs with ids | ⚠️ (`processId` missing; `waitpointTokenId` is logged) |
 
 ## 14. Human waitpoints (approvals, plan mode)
 | Requirement | Status |
 |---|---|
-| Options / plan / credit / media approval waitpoints | ❌ |
-| Pause safely, resume exactly once, tolerate duplicate submits | ❌ |
-| Approval overlays in the UI | ❌ |
+| Options / plan / credit / media approval waitpoints | ✅ |
+| Pause safely, resume exactly once, tolerate duplicate submits | ✅ |
+| Approval overlays in the UI | ✅ |
 
 ## 15. Bonus
 | Item | Status |

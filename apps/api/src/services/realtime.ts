@@ -1,4 +1,4 @@
-import { auth, runs, tasks } from "@trigger.dev/sdk";
+import { auth, runs, tasks, wait } from "@trigger.dev/sdk";
 import { AGENT_TURN_TASK, MAGICA_RUN_TASK, type RealtimeAccess } from "@gx/contracts";
 
 const TOKEN_TTL_SECONDS = 60 * 60;
@@ -37,3 +37,6 @@ export async function triggerRunEnded(triggerRunId: string): Promise<"cancelled"
   if (r.isCancelled) return "cancelled";
   return r.isCompleted ? "ended" : null;
 }
+
+/** Wake a run suspended on a waitpoint token; completing an already completed token is a no-op. */
+export const completeWaitpointToken = (tokenId: string, data: { answered: true }) => wait.completeToken(tokenId, data);

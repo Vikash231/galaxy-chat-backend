@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { SafeError } from "./content";
+import { WaitpointView } from "./waitpoints";
 
 export const ToolStatus = z.enum(["pending", "dispatching", "running", "completed", "failed", "cancelled"]);
 export type ToolStatus = z.infer<typeof ToolStatus>;
 
-export const RunPhase = z.enum(["thinking", "working", "complete", "failed", "cancelled", "stopping"]);
+export const RunPhase = z.enum(["thinking", "working", "waiting", "complete", "failed", "cancelled", "stopping"]);
 export type RunPhase = z.infer<typeof RunPhase>;
 
 /** Run metadata: small state snapshot, overwritten on each change. */
@@ -13,6 +14,7 @@ export const RunMeta = z.object({
   step: z.number().int(),
   label: z.string().optional(),
   error: SafeError.optional(),
+  waitpoint: WaitpointView.optional(),
   tools: z.record(
     z.string(),
     z.object({

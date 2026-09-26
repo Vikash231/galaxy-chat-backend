@@ -12,17 +12,21 @@ const BASE_PROMPT = [
   "If the user asks to edit an image but none is attached, ask them to attach one.",
   "To create a new image, call gpt_image_2 with only a prompt; to change an existing image, also pass its name in images.",
   "To join videos end to end, call merge_videos with their names in the order the user wants.",
-  "If the user's wording about order, or about which file is which, is unclear, ask a short question before calling a tool; tool runs cost credits.",
+  "If the user's wording about order, or about which file is which, is unclear and a wrong guess would cost credits, call ask_user with the choices (or the files) instead of guessing.",
   'After merging, say the final order in plain words, e.g. "the 6-second clip, then the 15-second clip".',
   "In replies, describe files by what they show; never mention their names like img_1 to the user.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
 
-/** Base instructions plus the skills list: names and descriptions only, never the guides themselves. */
-export function systemPrompt(skills: string[] = []): string {
-  if (!skills.length) return BASE_PROMPT;
+const PLAN_MODE_PROMPT =
+  "PLAN MODE is on. Before any tool that costs credits, call propose_plan with a short summary and the steps; give tool and args (as JSON) for every step that uses a tool, so the cost can be shown. Paid tools are blocked until the user approves. After approval, carry out the plan. If the approval includes a note from the user, the note is part of the plan: apply it to the tool arguments (for example, add it to the prompt) before calling the tool.";
+
+/** Base instructions plus the skills list (names and descriptions only, never the guides themselves) and the plan-mode rule. */
+export function systemPrompt(skills: string[] = [], planMode = false): string {
+  const base = planMode ? `${BASE_PROMPT} ${PLAN_MODE_PROMPT}` : BASE_PROMPT;
+  if (!skills.length) return base;
   return [
-    BASE_PROMPT,
+    base,
     "Skills are free guides for specific kinds of work. When a request matches one, call load_skill before acting, then follow it; read its extra files with read_skill_asset only when the guide asks.",
     "Skills:",
     ...skills,
@@ -36,6 +40,8 @@ export interface TurnPorts {
   maxSteps: number;
   /** Skills list lines for the system prompt (see systemPrompt). */
   skills?: string[];
+  /** Plan mode: the system prompt asks for a plan first (the executor enforces it). */
+  planMode?: boolean;
   signal?: AbortSignal;
   history(): Promise<StoredMessage[]>;
   emit(part: StreamPart): void;
@@ -52,7 +58,7 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const fileCtx = { files: collectFiles(history), aliases: collectAliases(history), durations: collectDurations(history) };
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
-  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(p.skills) }, ...toLlmMessages(history)];
+  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(p.skills, p.planMode) }, ...toLlmMessages(history)];
 
   for (let step = 0; step < p.maxSteps; step++) {
     p.meta({ status: "thinking", step, label: undefined });
@@ -95,6 +101,13 @@ export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
     await p.checkpoint(blocks, step);
     const stop = results.find((r) => r.stop)?.stop;
     if (stop) return finish({ status: "failed", error: stop });
+    // The user declined or never answered: finish normally with a note, without another model call.
+    const end = results.find((r) => r.end)?.end;
+    if (end) {
+      blocks.push({ type: "text", text: end });
+      await p.checkpoint(blocks, step);
+      return finish({ status: "completed" });
+    }
   }
 
   blocks.push({ type: "text", text: "I stopped here because this reply reached its step limit. Send a follow-up to continue." });

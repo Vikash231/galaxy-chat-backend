@@ -41,6 +41,20 @@ enum ToolStatus {
   cancelled
 }
 
+enum WaitpointKind {
+  options
+  plan
+  credit
+  media
+}
+
+enum WaitpointStatus {
+  pending
+  answered
+  expired
+  cancelled
+}
+
 model User {
   id           String         @id @default(cuid())
   clerkId      String         @unique
@@ -108,10 +122,12 @@ model AgentRun {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   finishedAt       DateTime?
+  planMode         Boolean          @default(false) // paid tools stay blocked until a plan is approved
   assistantMessage Message?         @relation("RunAssistantMessage")
   tools            ToolInvocation[]
   ledger           CreditLedger[]
   skills           RunSkill[]
+  waitpoints       Waitpoint[]
 
   @@index([chatId, createdAt])
   @@index([userId, createdAt])
@@ -197,6 +213,25 @@ model RunSkill {
   createdAt   DateTime @default(now())
 
   @@unique([runId, name])
+}
+
+// A question the agent is waiting on (options, plan, credit or media approval). Postgres is the truth; the Trigger.dev token only wakes the run.
+model Waitpoint {
+  id         String          @id @default(cuid())
+  runId      String
+  run        AgentRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  key        String // the tool call id, or credit:<step>
+  kind       WaitpointKind
+  request    Json // Zod-validated WaitpointRequest
+  status     WaitpointStatus @default(pending)
+  answer     Json?
+  tokenId    String?         @unique
+  expiresAt  DateTime
+  answeredAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@unique([runId, key])
+  @@index([runId, status])
 }
 
 // One row per provider per day; the spend cap is a single-row conditional update.

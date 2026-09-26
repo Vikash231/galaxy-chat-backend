@@ -42,6 +42,9 @@ export const WorkerEnv = z.object({
   MAGICA_MODE: z.enum(["fixture", "live"]).default("fixture"),
   MAGICA_DAILY_CAP_MICRO: micro.default(200_000n),
   AGENT_MAX_STEPS: int(8),
+  // How long an unanswered question stays open, and the step cost at which the agent asks before spending.
+  WAITPOINT_TTL_SECONDS: int(600),
+  CREDIT_APPROVAL_MICRO: micro.default(50_000n),
   AGENT_HISTORY_LIMIT: int(40),
   AGENT_QUEUE_CONCURRENCY: int(50),
   TOOL_QUEUE_CONCURRENCY: int(10),

@@ -1,6 +1,7 @@
 import { AppError, type ChatView, type PageQuery, ACTIVE_RUN_STATUSES } from "@gx/contracts";
 import { prisma } from "./client";
 import { decodeCursor, toPage } from "./cursor";
+import { pendingWaitpoint, toWaitpointView } from "./waitpoints";
 
 type ChatRow = { id: string; title: string; pinned: boolean; createdAt: Date; updatedAt: Date };
 
@@ -40,5 +41,6 @@ export async function getChatDetail(userId: string, chatId: string) {
     where: { chatId, status: { in: [...ACTIVE_RUN_STATUSES] } },
     select: { id: true, status: true },
   });
-  return { chat: toChatView(chat), activeRun: active ? { runId: active.id, status: active.status } : null };
+  const waiting = active ? await pendingWaitpoint(active.id) : null;
+  return { chat: toChatView(chat), activeRun: active ? { runId: active.id, status: active.status, waitpoint: waiting ? toWaitpointView(waiting) : null } : null };
 }
