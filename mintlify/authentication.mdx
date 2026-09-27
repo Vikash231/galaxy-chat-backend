@@ -1,0 +1,48 @@
+---
+title: "Authentication"
+description: "Send a Clerk session token as a Bearer token."
+---
+
+Every `/api/v1` endpoint needs a signed-in user. Send the user's Clerk session token in the `Authorization` header:
+
+```bash
+curl https://galaxy-chat-api.vercel.app/api/v1/me \
+  -H "Authorization: Bearer <clerk-session-token>"
+```
+
+`GET /api/health` is the only endpoint that works without a token.
+
+## Getting a token
+
+The API does not issue tokens itself. Sign in to the Galaxy web app, then read the current session token from Clerk in the browser console:
+
+```js
+await window.Clerk.session.getToken()
+```
+
+Clerk session tokens are short-lived (about 60 seconds by default). Call `getToken()` again for each request, or when you get a `401`.
+
+## What the API checks
+
+The API verifies the token without calling Clerk:
+
+| Check | Rule |
+|---|---|
+| Signature | RS256, against the Clerk instance's public keys (JWKS, cached) |
+| Time | `exp` and `nbf`, with 5 seconds of clock tolerance |
+| Authorized party | `azp` must be the Galaxy web app's origin |
+| User | `sub` is the Clerk user id |
+
+The first request from a new Clerk user creates their account and grants the signup credits once, even when several first requests arrive at the same time.
+
+## Errors
+
+| Case | Response |
+|---|---|
+| No header, or not `Bearer <token>` | `401 unauthenticated`: "Sign in to continue." |
+| Bad signature, expired, or wrong `azp` | `401 unauthenticated`: "Your session has expired. Sign in again." |
+| Another user's chat, run or question | `404 not_found`. The API never says whether it exists. |
+
+## Realtime tokens are different
+
+Watching a reply live uses a second, narrower token: a Trigger.dev public token that can only **read one run** for up to one hour. The API returns it when you send a message, and `POST /runs/{runId}/token` gives a fresh one. See [Long-running runs](/runs).

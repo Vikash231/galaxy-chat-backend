@@ -1,0 +1,46 @@
+---
+title: "Introduction"
+description: "Start agent conversations that use tools, stream progress and survive reloads."
+---
+
+The Galaxy Agent Chat API runs an AI agent inside a chat. The agent can crop images, create and edit images with GPT Image 2, and merge videos. It can also pause to ask you a question or to approve a cost.
+
+**Base URL:** `https://galaxy-chat-api.vercel.app/api/v1`
+
+## How a reply works
+
+1. You send a message: `POST /chats/{chatId}/messages`.
+2. The API saves it, starts the reply as a background job and answers `202` without waiting for the reply. The response has a `runId` and a realtime token.
+3. You watch the reply live with that token: status, streamed text and tool progress.
+4. If the agent needs you, the reply pauses on a [waitpoint](/waitpoints) until you answer.
+5. When the reply ends, the saved message has the full text, tool results and files.
+
+Postgres is the source of truth. Realtime is only the transport, so a reload or a lost connection never loses a reply. See [Long-running runs](/runs).
+
+## What you can call
+
+| Area | Endpoints |
+|---|---|
+| Account | `GET /me` |
+| Chats | `POST /chats`, `GET /chats` (list, pinned, title search), `GET` / `PATCH` / `DELETE /chats/{chatId}` |
+| Messages | `GET /chats/{chatId}/messages` (newest first, cursor pages), `POST /chats/{chatId}/messages` |
+| Runs | `GET /runs/{runId}`, `POST /runs/{runId}/token`, `POST /runs/{runId}/cancel`, `POST /runs/{runId}/retry` |
+| Questions | `POST /waitpoints/{waitpointId}/answer` |
+| Uploads | `POST /uploads/sign`, `POST /uploads/complete` (Transloadit) |
+
+The full list with request and response schemas is in the **API reference** tab. It is generated from the API's own OpenAPI document at `https://galaxy-chat-api.vercel.app/api/openapi.json`.
+
+## Limits
+
+| Limit | Value |
+|---|---|
+| Message length | 8,000 characters |
+| Attachments per message | 10 |
+| Messages you can send | 10 per minute per user |
+| Active replies per chat | 1 (a second send gets `409 run_active`) |
+| Page size | 1 to 50 items, default 30 |
+| Pinned chats | 50 |
+
+## Models
+
+Replies use OpenRouter's free model router (`openrouter/free`). There is no paid fallback. When free models are busy, the reply fails with a clear message and can be retried.

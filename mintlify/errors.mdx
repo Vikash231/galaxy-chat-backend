@@ -1,0 +1,61 @@
+---
+title: "Errors"
+description: "One error shape for every endpoint, with a trace id you can quote."
+---
+
+Every error has the same body:
+
+```json
+{
+  "error": {
+    "code": "run_active",
+    "message": "A reply is still in progress in this chat.",
+    "traceId": "3f0c2b9e-6c1a-4f7e-9a47-1d8e2b6f0c11",
+    "details": { "activeRunId": "cmuj..." }
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `code` | Stable, machine-readable. Branch on this, not on the message. |
+| `message` | Safe to show to users as-is. Never contains provider internals or secrets. |
+| `traceId` | Also sent as the `x-trace-id` header on every response. Every server log line for the request carries it. Send your own with `x-request-id`. |
+| `details` | Optional extra data, such as the active run id or validation issues. |
+
+## Codes
+
+| Code | HTTP | When |
+|---|---|---|
+| `unauthenticated` | 401 | Missing, invalid or expired session token |
+| `insufficient_credits` | 402 | The balance is below the minimum needed to start a reply (5,000 microcredits) |
+| `not_found` | 404 | The chat, run or question does not exist, or belongs to another user |
+| `run_active` | 409 | A reply is already running in this chat, or you tried to delete a chat while one runs |
+| `run_not_dispatched` | 409 | The reply was saved but never started. Send the message again. |
+| `run_finished` | 409 | You asked for a realtime token for a reply that has ended |
+| `waitpoint_closed` | 409 | The question was already answered differently, expired, or was cancelled |
+| `run_not_retryable` | 409 | Retry refused: not failed or stopped, not the newest reply, a paid tool is still finishing, or the error cannot be retried |
+| `validation_failed` | 422 | The request does not match the schema. `details.issues` lists each field and why. |
+| `rate_limited` | 429 | More than 10 messages in a minute. The response has `Retry-After: 60`. |
+| `upload_not_ready` | 409 | The upload has not finished processing |
+| `upload_rejected` | 422 | The file type, size or attachment is not allowed |
+| `upload_quota` | 429 | The monthly upload allowance is used up |
+| `dispatch_failed` | 503 | The background job could not be started, or a question's answer was saved but the reply could not resume. Retrying the same request is safe. |
+| `internal` | 500 | Unexpected server error. Quote the `traceId`. |
+
+## Validation example
+
+```json
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Some fields are invalid.",
+    "traceId": "…",
+    "details": { "issues": [{ "path": "text", "message": "Too big: expected string to have <=8000 characters" }] }
+  }
+}
+```
+
+## Errors inside a reply
+
+A reply that fails after it started does not return an HTTP error: your send already got `202`. The failure is saved on the run and the message as a safe error (`code`, `message`, `retryable`) and shown in realtime. Examples: `llm_unavailable` (free models busy, retryable), `llm_context_too_long` (the chat is too long for the model), `insufficient_credits` (out of credits mid-reply). See [Long-running runs](/runs).

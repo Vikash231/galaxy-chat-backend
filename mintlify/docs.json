@@ -1,0 +1,29 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Galaxy Agent Chat API",
+  "colors": {
+    "primary": "#0B6E75",
+    "light": "#5CC6CD",
+    "dark": "#0B6E75"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          { "group": "Get started", "pages": ["introduction", "authentication", "errors"] },
+          { "group": "Concepts", "pages": ["runs", "waitpoints", "credits", "webhooks"] }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "groups": [{ "group": "Endpoints", "openapi": "openapi.json" }]
+      }
+    ]
+  },
+  "api": {
+    "playground": { "display": "interactive" },
+    "examples": { "languages": ["curl", "javascript", "python"] }
+  }
+}

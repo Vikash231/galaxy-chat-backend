@@ -1,0 +1,55 @@
+---
+title: "Waitpoints"
+description: "When the agent needs the user, the reply pauses until they answer."
+---
+
+A waitpoint is a question the reply is waiting on. While it waits, the run is suspended: it uses no compute and does not count toward its time limit. The question is saved in Postgres, so it survives a reload.
+
+## The four kinds
+
+| Kind | Who asks | When | Answer with |
+|---|---|---|---|
+| `options` | The model (`ask_user`) | It needs one choice from a short list (2 to 6 options) | `{ "choice": "<one of the options>" }` |
+| `media` | The model (`ask_user` with files) | It needs the user to pick one file, e.g. "Which clip should come first?" (up to 10 files) | `{ "choice": "<file name, e.g. vid_2>" }` |
+| `plan` | The model (`propose_plan`), required in plan mode | Before any paid tool when the message was sent with `planMode: true`. The cost shown is computed by the server from each step's tool and arguments, never taken from the model. | `{ "approve": true, "note": "optional change" }` |
+| `credit` | The server | A step's paid tools cost 10,000 microcredits or more, or, in plan mode, spending would go past the approved plan | `{ "approve": true }` or `{ "approve": false }` |
+
+## Seeing the question
+
+- **Live:** the run metadata's `waitpoint` field, with `status: "waiting"`.
+- **After a reload:** `GET /chats/{chatId}` returns it as `activeRun.waitpoint`.
+
+```json
+{
+  "id": "cmujpu35r0007...",
+  "kind": "credit",
+  "request": { "kind": "credit", "tools": [{ "name": "merge_videos", "estimateMicro": 17582 }], "stepMicro": 17582, "totalMicro": 17582 },
+  "expiresAt": "2026-09-27T11:18:51.000Z"
+}
+```
+
+## Answering
+
+```bash
+curl -X POST https://galaxy-chat-api.vercel.app/api/v1/waitpoints/$WAITPOINT_ID/answer \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{ "approve": true }'
+```
+
+Returns `{ "id": "…", "status": "answered" }`, and the reply resumes.
+
+| Case | Result |
+|---|---|
+| A choice that was not offered | `422 validation_failed`; the question stays open |
+| The same answer twice (double click, two tabs) | `200` both times; the reply resumes once |
+| A different answer after the first | `409 waitpoint_closed` |
+| Answer after it expired or after a stop | `409 waitpoint_closed` |
+| Answer saved but the reply could not be woken | `503 dispatch_failed`. Send the same answer again; it is safe. |
+| Another user's question | `404 not_found` |
+
+## Expiry and stop
+
+- A question stays open for **10 minutes**. Then it expires, and the reply ends normally with a note that tells the user how to continue. Nothing is spent.
+- Declining a plan or a cost ends the reply with a note. Nothing is spent.
+- `POST /runs/{runId}/cancel` while a question is open cancels the question too.
+- The answer and the expiry can land at the same moment: Postgres decides which one won, so an answer is never lost.

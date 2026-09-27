@@ -1,0 +1,51 @@
+---
+title: "Credits"
+description: "Media tools cost credits; the model is free. Every charge is recorded once in a ledger."
+---
+
+All amounts are **microcredits**: integers, sent as strings in JSON so large values stay exact.
+
+```json
+GET /api/v1/me
+{ "user": { "id": "cmu...", "clerkId": "user_..." }, "credits": { "balanceMicro": "4700000", "formatted": "4.70M" } }
+```
+
+`formatted` shows millions as `4.70M` and smaller amounts as plain numbers (`17,582`).
+
+## What costs credits
+
+| Item | Cost |
+|---|---|
+| Model tokens (OpenRouter free) | **0**. Tokens are recorded for usage only. |
+| Crop Image | 5,000 per crop |
+| GPT Image 2, Low, 1024×1024 | about 7,644 per image |
+| GPT Image 2, Medium, 1024×1024 | about 68,484 per image |
+| Merge Videos | (40,000 + 10,000 × (clips − 1)) per minute of output |
+
+The estimate is computed before the tool runs. The charge is the actual cost Magica reports for that job, so it can differ slightly from the estimate.
+
+## Limits and approvals
+
+| Rule | Value |
+|---|---|
+| Signup grant | 5,000,000, once per user |
+| Minimum balance to start a reply | 5,000 (else `402 insufficient_credits`) |
+| Ask before spending | When one model step's paid tools cost 10,000 or more, the reply pauses for a [`credit` waitpoint](/waitpoints) |
+| Plan mode | No paid tool runs before a plan is approved; spending past the approved estimate asks again |
+| Out of credits mid-reply | The tool is refused, the reply stops, and work already done is kept and charged |
+| Daily platform budget for Magica | A shared cap across all users; past it, paid tools fail with "The tool budget for today is used up." |
+
+## Charged exactly once
+
+- Each tool call is one row; a retried or resumed reply reuses the row and the Magica job instead of starting a new one.
+- Each charge is one ledger row with a unique key (`tool:<toolInvocationId>`), so a repeated settlement is a no-op.
+- The balance changes only in the same transaction as its ledger row.
+- A stopped reply still finishes and charges a Magica job that had already started; you get the result.
+
+## Where to see spending
+
+| Place | Shows |
+|---|---|
+| `GET /me` | Current balance |
+| `GET /runs/{runId}` | Each tool call's estimate, charged credits and duration |
+| The assistant message's `usage` block | Credits for the whole reply, prompt and completion tokens, and the models used |

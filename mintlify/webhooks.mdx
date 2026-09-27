@@ -1,0 +1,36 @@
+---
+title: "Webhooks"
+description: "The webhook we receive from Magica today, and the outbound webhooks that are not built yet."
+---
+
+## Inbound: Magica job completion
+
+Paid media tools (Crop Image, GPT Image 2, Merge Videos) run as jobs on Magica. Each job can take seconds to minutes, so the worker does not keep a process busy polling.
+
+How it works for one tool call:
+
+1. The worker creates a Trigger.dev **wait token** for this tool call (10-minute timeout).
+2. It starts the Magica job with a webhook pointing at that token's callback URL, for the events `run.completed`, `run.failed` and `run.canceled`.
+3. The task suspends: no compute is used while Magica works.
+4. Magica calls the callback URL when the job ends, which wakes the task.
+5. The worker then reads the job from Magica's API (`GET /v1/nodes/runs/{runId}`) and uses **that** as the result. The webhook body is never trusted.
+6. If no webhook arrives within 10 minutes, the worker checks Magica's API every 5 seconds, up to 60 times (5 more minutes). If the job still has not finished, the tool is marked failed: "The media service is taking too long. Try again later."
+
+Notes:
+
+- The callback URL belongs to Trigger.dev, not to this API, so there is no webhook endpoint to call on `galaxy-chat-api.vercel.app`.
+- The URL is unique per tool call and hard to guess, and it only wakes the task; the result always comes from Magica's API with our key.
+- Retries are safe: the Magica job id is saved before waiting, so a resumed task checks the same job instead of starting (and paying for) a new one.
+
+## Outbound: lifecycle events
+
+<Warning>
+Outbound webhooks are **not built yet**. The API does not send `agent.started`, `agent.completed`, `agent.failed` or `tool.completed` events.
+</Warning>
+
+Until they exist, you can follow a reply with:
+
+| Need | Use |
+|---|---|
+| Live progress | Trigger.dev realtime with the token from the send response ([Long-running runs](/runs)) |
+| Final state | `GET /runs/{runId}` (status, tool calls, credits, the saved message) |

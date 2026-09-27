@@ -1,0 +1,90 @@
+---
+title: "Long-running runs"
+description: "Send returns at once; the reply runs in the background and can be watched, recovered, stopped and retried."
+---
+
+A reply can take minutes: several model steps, paid media tools, questions to the user. Each reply is one **run**. The HTTP request only starts it.
+
+## 1. Send
+
+```bash
+curl -X POST https://galaxy-chat-api.vercel.app/api/v1/chats/$CHAT_ID/messages \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{ "clientMessageId": "2f1d3c4e-5b6a-4c7d-8e9f-0a1b2c3d4e5f", "text": "Crop the tiger photo to a square", "planMode": false }'
+```
+
+`202 Accepted`:
+
+```json
+{
+  "chatId": "cmuj...",
+  "messageId": "cmuj...",
+  "runId": "cmuj...",
+  "realtime": { "triggerRunId": "run_06ge...", "publicAccessToken": "eyJ...", "expiresAt": "2026-09-27T12:00:00.000Z" }
+}
+```
+
+- **`clientMessageId`** is a UUID you generate. Sending the same one again returns the **same** message and run with `200`, so a retried network request never creates a second reply.
+- **One active run per chat.** The database enforces it. A second send while a reply runs gets `409 run_active` with `details.activeRunId`.
+- Before the run starts, the API checks the send rate (10 per minute) and a minimum balance (5,000 microcredits).
+
+## 2. Watch it live
+
+The reply runs as a [Trigger.dev](https://trigger.dev) task. Subscribe to it directly from the browser with the `realtime` values. The token can only read this one run, for one hour.
+
+```tsx
+import { useRealtimeRun, useRealtimeStream } from "@trigger.dev/react-hooks";
+
+const { run } = useRealtimeRun(realtime.triggerRunId, { accessToken: realtime.publicAccessToken });
+const meta = run?.metadata?.gx; // status, step, label, tools, waitpoint, error
+
+const { parts } = useRealtimeStream(realtime.triggerRunId, "assistant", { accessToken: realtime.publicAccessToken });
+// parts: { t: "text" | "thinking", step: number, d: string }[]
+```
+
+| Channel | What it carries |
+|---|---|
+| Run metadata, key `gx` | `status` (`thinking`, `working`, `waiting`, `complete`, `failed`, `cancelled`), current `step`, a `label` such as "Cropping image", each tool call's status, credits and result file, the pending `waitpoint`, and the `error` if it failed |
+| Stream `assistant` | Text and thinking, token by token, tagged with the model step |
+
+Subscribe to the stream after the first metadata arrives: the worker creates the stream before it publishes metadata, and subscribing to a stream that does not exist yet fails with `400`.
+
+The run's text is saved to Postgres at the end of each model step, never per token.
+
+## 3. Recover after a reload
+
+Realtime is only transport. Everything is in Postgres, so a reload, a chat switch or a dropped connection loses nothing:
+
+| Call | Gives you |
+|---|---|
+| `GET /chats/{chatId}` | The chat and its `activeRun` (`runId`, `status`, the pending `waitpoint`), or `null` |
+| `GET /chats/{chatId}/messages` | Saved messages, newest first, with each message's `checkpointStep` (the last model step already saved) |
+| `POST /runs/{runId}/token` | A fresh realtime token for an active run. `409 run_finished` if it has ended. |
+| `GET /runs/{runId}` | Run status, tool calls (inputs, status, credits, duration, errors) and the assistant message: use it to poll when realtime is down |
+
+`POST /runs/{runId}/token` also repairs a stuck run: if Trigger.dev reports the run already ended but Postgres still shows it active (for example, the worker was killed), the API marks it failed or stopped first, so the chat is never blocked.
+
+## Stop
+
+`POST /runs/{runId}/cancel` stops the reply and returns `{ "runId": "…", "status": "cancelled" }`.
+
+- Text and tool results saved so far stay visible, and the message is marked `cancelled`.
+- A paid Magica job that already started cannot be recalled. It is finished in the background and charged once, so you never pay for a result you do not get.
+- Stopping a reply that has already ended returns its final status and changes nothing.
+
+## Retry
+
+`POST /runs/{runId}/retry` runs a failed or stopped reply again for the same user message. It returns the same shape as a send (`202`).
+
+| Rule | Why |
+|---|---|
+| Only `failed` or `cancelled` runs whose error is retryable | "Out of credits" needs credits, not a retry |
+| Only the newest run in the chat, with no active run | Keeps history in order |
+| Refused while a paid tool from the stopped run is still finishing | Prevents paying twice |
+| A run is retried once; asking again returns the same retry run | A double click never starts two replies |
+
+The new reply appears below the failed one; the failed one stays in history. The model is told the previous try stopped and to reuse results it already has.
+
+## Long conversations
+
+The model gets a token budget of history (about 24,000 estimated tokens), newest turns first, never splitting a question from its reply. When a chat passes 16,000 prompt tokens or 40 messages, older messages are folded into a summary in the background. Nothing is deleted: the API always returns the full history.
