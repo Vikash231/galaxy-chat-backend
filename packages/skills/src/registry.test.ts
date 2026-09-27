@@ -104,7 +104,7 @@ describe("repository skills", () => {
   it("all load with no rejections, and each description says when to use it", () => {
     const { skills, rejected } = loadSkills([new URL("../../../agent-skills", import.meta.url).pathname]);
     expect(rejected).toEqual([]);
-    expect([...skills.keys()]).toEqual(["product-photo", "social-media-sizes", "video-montage"]);
+    expect([...skills.keys()]).toEqual(["image-crop", "product-photo", "social-media-sizes", "video-montage"]);
     for (const s of skills.values()) expect(s.description).toMatch(/Use when/);
     expect(skills.get("social-media-sizes")!.assets).toEqual(["sizes.json"]);
     expect(JSON.parse(readAsset(skills.get("social-media-sizes")!, "sizes.json")).instagram.story).toEqual([1080, 1920]);

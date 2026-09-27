@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const WaitpointKind = z.enum(["options", "plan", "credit", "media"]);
+export const WaitpointKind = z.enum(["options", "plan", "credit", "media", "text"]);
 export type WaitpointKind = z.infer<typeof WaitpointKind>;
 
 export const WaitpointStatus = z.enum(["pending", "answered", "expired", "cancelled"]);
@@ -20,6 +20,8 @@ export const MAX_MEDIA_CHOICES = 10;
 
 export const WaitpointRequest = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("options"), question: z.string().min(1).max(300), options: z.array(z.string().min(1).max(120)).min(2).max(MAX_OPTIONS) }),
+  // An open question: the user types a short answer (e.g. how to crop).
+  z.object({ kind: z.literal("text"), question: z.string().min(1).max(300) }),
   z.object({
     kind: z.literal("media"),
     question: z.string().min(1).max(300),
@@ -37,10 +39,11 @@ export const WaitpointRequest = z.discriminatedUnion("kind", [
 ]);
 export type WaitpointRequest = z.infer<typeof WaitpointRequest>;
 
-/** options/media answer with `choice`; plan/credit answer with `approve`. */
+/** options/media answer with `choice`; plan/credit answer with `approve`; text answers with `text`. */
 export const WaitpointAnswer = z.union([
   z.object({ choice: z.string().min(1).max(500) }),
   z.object({ approve: z.boolean(), note: z.string().trim().max(500).optional() }),
+  z.object({ text: z.string().trim().min(1).max(500) }),
 ]);
 export type WaitpointAnswer = z.infer<typeof WaitpointAnswer>;
 
@@ -61,6 +64,7 @@ export type AnswerWaitpointResponse = z.infer<typeof AnswerWaitpointResponse>;
 /** Whether an answer fits the question; the offered values are the only valid choices. */
 export function checkAnswer(request: WaitpointRequest, answer: WaitpointAnswer): string | null {
   if (request.kind === "options") return "choice" in answer && request.options.includes(answer.choice) ? null : "Pick one of the offered options.";
+  if (request.kind === "text") return "text" in answer ? null : "Write your answer.";
   if (request.kind === "media") return "choice" in answer && request.files.some((f) => f.name === answer.choice) ? null : "Pick one of the offered files.";
   return "approve" in answer ? null : "Answer with approve true or false.";
 }

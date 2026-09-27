@@ -77,11 +77,13 @@ export function interactionTools(deps: Deps): AnyTool[] {
     question: z.string().min(1).max(300).describe("A short question."),
     options: z.array(z.string().min(1).max(120)).min(2).max(MAX_OPTIONS).optional().describe("2 to 6 short choices."),
     files: z.array(z.string()).min(1).max(MAX_MEDIA_CHOICES).optional().describe("File names to choose from, e.g. img_1. Use instead of options when the user should pick a file."),
+    // Neither options nor files: the user types the answer.
   });
-  const askOutput = z.object({ status: z.enum(["answered", "expired", "cancelled"]), choice: z.string().optional() });
+  // The question comes back with the answer, so a later step (maybe another model) knows what "vid_2" or "No" answered.
+  const askOutput = z.object({ status: z.enum(["answered", "expired", "cancelled"]), question: z.string().optional(), choice: z.string().optional(), text: z.string().optional() });
   const askUser: ToolDef<typeof askArgs, z.infer<typeof askOutput>> = {
     name: "ask_user",
-    description: "Ask the user to pick one of several options, or one of several files, when a wrong guess would waste credits. The user picks exactly one, so ask a question with a single answer (e.g. \"Which clip should come first?\"). Free. Give options or files, not both. Waits for the answer.",
+    description: "Ask the user when a wrong guess would waste credits. Give options (the user picks one), or files (the user picks one file), or neither (the user types a short answer, e.g. \"How would you like to crop this image?\"). Ask one question with a single answer. Free. Waits for the answer.",
     label: "Waiting for your answer",
     args: askArgs,
     output: askOutput,
@@ -97,9 +99,10 @@ export function interactionTools(deps: Deps): AnyTool[] {
     exec: {
       kind: "local",
       run: async (a, ctx) => {
-        if (!!a.options === !!a.files) throw new ToolRunError("Give either options or files, not both and not neither.");
+        if (a.options && a.files) throw new ToolRunError("Give options or files, not both.");
         let request;
         if (a.options) request = { kind: "options" as const, question: a.question, options: a.options };
+        else if (!a.files) request = { kind: "text" as const, question: a.question };
         else {
           // Names were swapped for URLs while the arguments were checked; swap back so the answer is a name.
           const nameOf = new Map([...ctx.files.files].map(([n, u]) => [u, n]));
@@ -107,7 +110,8 @@ export function interactionTools(deps: Deps): AnyTool[] {
           request = { kind: "media" as const, question: a.question, files };
         }
         const res = await ctx.ask(request);
-        if (res.status === "answered" && "choice" in res.answer) return { status: "answered" as const, choice: res.answer.choice };
+        if (res.status === "answered" && "choice" in res.answer) return { status: "answered" as const, question: a.question, choice: res.answer.choice };
+        if (res.status === "answered" && "text" in res.answer) return { status: "answered" as const, question: a.question, text: res.answer.text };
         return { status: res.status === "answered" ? ("cancelled" as const) : res.status };
       },
     },

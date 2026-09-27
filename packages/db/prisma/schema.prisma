@@ -46,6 +46,7 @@ enum WaitpointKind {
   plan
   credit
   media
+  text
 }
 
 enum WaitpointStatus {

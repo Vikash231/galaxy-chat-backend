@@ -358,9 +358,26 @@ describe("waitpoints", () => {
     const tools = fakeTools({ ask });
     const out = await runAgentTurn(ports(llm, tools));
     expect(ask).toHaveBeenCalledWith("0:c1", { kind: "options", question: "Which order?", options: ["The tiger clip first", "The forest clip first"] });
-    expect(toolMessages(seen[1]!)[0]).toEqual({ status: "answered", choice: "The tiger clip first" });
+    // The question comes back with the answer, so a later step knows what the choice answered.
+    expect(toolMessages(seen[1]!)[0]).toEqual({ status: "answered", question: "Which order?", choice: "The tiger clip first" });
     expect(out.status).toBe("completed");
     expect(tools.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("with no options or files, asks an open question and feeds the typed answer back", async () => {
+    const ask = vi.fn(async () => answered({ text: "keep the left half" }));
+    const { llm, seen } = fakeLlm([step({ toolCalls: [askUser("c1", { question: "How would you like to crop this image?" })] }), step({ text: "Cropping." })]);
+    await runAgentTurn(ports(llm, fakeTools({ ask })));
+    expect(ask).toHaveBeenCalledWith("0:c1", { kind: "text", question: "How would you like to crop this image?" });
+    expect(toolMessages(seen[1]!)[0]).toEqual({ status: "answered", question: "How would you like to crop this image?", text: "keep the left half" });
+  });
+
+  it("refuses options and files together", async () => {
+    const ask = vi.fn();
+    const { llm, seen } = fakeLlm([step({ toolCalls: [askUser("c1", { question: "Which?", options: ["A", "B"], files: ["https://e.com/a.jpg"] })] }), step({ text: "ok" })]);
+    await runAgentTurn(ports(llm, fakeTools({ ask })));
+    expect(ask).not.toHaveBeenCalled();
+    expect(JSON.stringify(toolMessages(seen[1]!)[0])).toContain("not both");
   });
 
   it.each([

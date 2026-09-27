@@ -36,6 +36,7 @@ export function createScriptedProvider(): LlmProvider {
       // A retry adds a note as the last user message; the request is the one before it.
       const user = [...messages].reverse().find((m) => m.role === "user" && !m.content.startsWith("The previous reply stopped"))?.content ?? "";
 
+      if (user.includes("[text]")) return step({ toolCalls: [call("ask_user", { question: "How would you like to crop this image?" })] });
       if (user.includes("[ask]")) return step({ toolCalls: [call("ask_user", { question: "Which colour do you prefer?", options: ["Red", "Blue"] })] });
       if (user.includes("[plan]"))
         return step({
@@ -43,7 +44,7 @@ export function createScriptedProvider(): LlmProvider {
         });
       if (user.includes("[low]")) return step({ toolCalls: [call("gpt_image_2", lowFox)] });
       if (user.includes("[pay]")) return step({ toolCalls: [call("gpt_image_2", { prompt: "a red fox", size: "1024x1024", quality: "high" })] });
-      return say("This is the scripted model. Use [ask], [plan], [low] or [pay] in your message.");
+      return say("This is the scripted model. Use [ask], [text], [plan], [low] or [pay] in your message.");
     },
   };
 }
