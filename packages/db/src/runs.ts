@@ -143,6 +143,7 @@ export const recordStep = (runId: string, step: number, model: string, promptTok
       steps: step + 1,
       routedModels: { push: model },
       promptTokens: { increment: promptTokens },
+      lastPromptTokens: promptTokens,
       completionTokens: { increment: completionTokens },
     },
   });

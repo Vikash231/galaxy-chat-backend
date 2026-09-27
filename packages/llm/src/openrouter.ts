@@ -5,6 +5,8 @@ export type OpenRouterOptions = {
   apiKey: string;
   baseURL: string;
   model: string;
+  /** Default reply length cap for every call. */
+  maxTokens?: number;
   backoffMs?: number[];
   client?: Pick<OpenAI, "chat">;
 };
@@ -29,6 +31,7 @@ export function createOpenRouterProvider(opts: OpenRouterOptions): LlmProvider {
         model: opts.model,
         messages: req.messages as OpenAI.ChatCompletionMessageParam[],
         ...(req.tools.length && { tools: req.tools }),
+        ...((req.maxTokens ?? opts.maxTokens) && { max_tokens: req.maxTokens ?? opts.maxTokens }),
         stream: true,
         stream_options: { include_usage: true },
       },
@@ -81,6 +84,8 @@ export function createOpenRouterProvider(opts: OpenRouterOptions): LlmProvider {
             await sleep(backoff[i]!, req.signal);
             continue;
           }
+          if (status === 400 && /context|too long|maximum.*tokens/i.test((e as Error).message ?? ""))
+            throw new LlmError("llm_context_too_long", "This chat is too long for the model. Start a new chat.", false);
           if (status === 429 || status === 503)
             throw new LlmError("llm_unavailable", "Free models are busy right now. Try again in a minute.", true);
           throw new LlmError("llm_error", "The model request failed.", true);

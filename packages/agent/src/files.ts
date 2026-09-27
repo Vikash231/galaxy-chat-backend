@@ -16,11 +16,14 @@ export function collectFiles(history: { content: ContentBlock[] }[]): Map<string
 
 /** Uploaded file name → short name, for names that match exactly one upload in the chat. */
 export function collectAliases(history: { content: ContentBlock[] }[]): Map<string, string> {
-  const seen = new Map<string, string | null>();
-  for (const m of history)
-    for (const b of m.content) if (b.type === "attachment") seen.set(b.name, seen.has(b.name) ? null : refOf(b));
-  return new Map([...seen].filter((e): e is [string, string] => e[1] !== null));
+  return aliasesOf(history.flatMap((m) => m.content.flatMap((b) => (b.type === "attachment" ? [[b.name, refOf(b)] as const] : []))));
 }
+
+const aliasesOf = (pairs: (readonly [string, string])[]) => {
+  const seen = new Map<string, string | null>();
+  for (const [name, ref] of pairs) seen.set(name, seen.has(name) && seen.get(name) !== ref ? null : ref);
+  return new Map([...seen].filter((e): e is [string, string] => e[1] !== null));
+};
 
 /** Known lengths of video/audio files, by URL; duration-billed tools estimate from these. */
 export function collectDurations(history: { content: ContentBlock[] }[]): Map<string, number> {
@@ -37,6 +40,8 @@ const SPOKEN = { img: "the image", vid: "the video", aud: "the audio" } as const
  */
 export function hideFileNames(text: string): string {
   return text
+    // Weak models sometimes print tool-call markup as text; the real calls arrive separately.
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>|<\/?tool_call>/gi, "")
     .replace(/<(video|audio|img)\b[^>]*>[\s\S]*?<\/\1>|<(video|audio|img)\b[^>]*\/?>/gi, "")
     .replace(/!?\[[^\]]*\]\(\s*(?:img|vid|aud)_[a-z0-9]+\s*\)/g, "")
     .replace(/\s*\((?:img|vid|aud)_[a-z0-9]+\)/g, "")
@@ -52,4 +57,35 @@ export function withRefs(value: unknown, urlToRef: ReadonlyMap<string, string>):
   if (Array.isArray(value)) return value.map((v) => withRefs(v, urlToRef));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withRefs(v, urlToRef)]));
   return value;
+}
+
+/** A named file of the chat, as recorded in Postgres (upload or tool result). */
+export type KnownFile = { ref: string; kind: "image" | "video" | "audio"; url: string; name?: string | null; tool?: string | null; durationSec?: number | null };
+
+/** Every file the tools may use: the chat's recorded files plus any named in the loaded history. */
+export function fileContext(history: { content: ContentBlock[] }[], known: KnownFile[] = []) {
+  const files = collectFiles(history);
+  const durations = collectDurations(history);
+  for (const f of known) {
+    files.set(f.ref, f.url);
+    if (f.durationSec != null) durations.set(f.url, f.durationSec);
+  }
+  const pairs = [
+    ...known.flatMap((f) => (f.name ? [[f.name, f.ref] as const] : [])),
+    ...history.flatMap((m) => m.content.flatMap((b) => (b.type === "attachment" ? [[b.name, refOf(b)] as const] : []))),
+  ];
+  return { files, aliases: aliasesOf(pairs), durations };
+}
+
+const MAX_LISTED_FILES = 50;
+
+/** Lines naming files the sent history no longer shows (trimmed or summarised), newest last. */
+export function olderFileLines(known: KnownFile[], sentText: string): string[] {
+  return known
+    .filter((f) => !new RegExp(`(?<![\\w])${f.ref}(?![\\w])`).test(sentText))
+    .slice(-MAX_LISTED_FILES)
+    .map((f) => {
+      const facts = [f.kind, f.durationSec != null ? `${Math.round(f.durationSec)}s` : "", f.name ? `uploaded "${f.name}"` : f.tool ? `made by ${f.tool}` : ""];
+      return `- ${f.ref} (${facts.filter(Boolean).join(", ")})`;
+    });
 }

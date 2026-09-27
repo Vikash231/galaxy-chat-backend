@@ -42,9 +42,10 @@ function coerceStep(step: unknown): unknown {
   const text = [s.text, s.description, s.title, s.name, s.step].find((v) => typeof v === "string" && v.trim());
   return {
     ...(text !== undefined && { text: (text as string).slice(0, 300) }),
-    ...(s.tool !== undefined && { tool: s.tool }),
+    // Models send null or "" for "no tool"; that means a free step.
+    ...(typeof s.tool === "string" && s.tool.trim() && { tool: s.tool.trim() }),
     // The field is a string so file names that do not exist yet are not resolved early.
-    ...(s.args !== undefined && { args: typeof s.args === "object" && s.args !== null ? JSON.stringify(s.args) : s.args }),
+    ...(s.args != null && s.args !== "" && { args: typeof s.args === "object" ? JSON.stringify(s.args) : s.args }),
   };
 }
 

@@ -1,5 +1,6 @@
 import { AppError, type AttachmentView, type ContentBlock } from "@gx/contracts";
 import { prisma, type Tx } from "./client";
+import { addChatFiles } from "./context";
 
 export type NewAttachment = Omit<AttachmentView, "id" | "sizeBytes"> & {
   userId: string;
@@ -57,6 +58,10 @@ export async function claimAttachments(tx: Tx, userId: string, chatId: string, m
   const rows = await tx.attachment.findMany({ where: { id: { in: ids } } });
   const byId = new Map(rows.map((r) => [r.id, r]));
   const refs = await reserveFileRefs(tx, chatId, ids.map((id) => byId.get(id)!.kind as FileKind));
+  await addChatFiles(tx, chatId, ids.map((id, i) => {
+    const a = byId.get(id)!;
+    return { ref: refs[i]!, kind: a.kind as FileKind, url: a.url, name: a.name, durationSec: a.durationSec };
+  }));
   return ids.map((id, i) => {
     const a = byId.get(id)!;
     return { type: "attachment", attachmentId: a.id, ref: refs[i], kind: a.kind as FileKind, url: a.url, name: a.name, mime: a.mime, width: a.width, height: a.height, durationSec: a.durationSec };

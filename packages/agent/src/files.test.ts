@@ -14,6 +14,11 @@ describe("hideFileNames", () => {
     expect(hideFileNames("I cropped `img_4` and merged vid_2 with aud_1.")).toBe("I cropped the image and merged the video with the audio.");
   });
 
+  it("drops tool-call markup a model printed as text", () => {
+    expect(hideFileNames("</tool_call>")).toBe("");
+    expect(hideFileNames('Sure.<tool_call>{"name":"crop_image"}</tool_call> Cropping now.')).toBe("Sure. Cropping now.");
+  });
+
   it("leaves ordinary text and real links alone", () => {
     const text = "Use a vivid_palette and see [docs](https://example.com/img_1.png).";
     expect(hideFileNames(text)).toBe(text);

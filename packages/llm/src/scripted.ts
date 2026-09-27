@@ -19,9 +19,11 @@ const call = (name: string, args: object) => ({ id: `s_${name}`, name, argsJson:
  */
 export function createScriptedProvider(): LlmProvider {
   return {
-    async streamStep({ messages }, onDelta) {
+    async streamStep({ messages, tools }, onDelta) {
       const last: LlmMessage | undefined = messages.at(-1);
       const say = (text: string) => (onDelta({ type: "text", delta: text }), step({ text }));
+      // A call with no tools is the chat summariser.
+      if (!tools.length) return say(`Scripted summary of ${String(last?.content ?? "").split("\n").length} lines.`);
 
       const lowFox = { prompt: "a red fox", size: "1024x1024", quality: "low" };
       // After an approved plan, carry it out once (the plan's only step), like a model following its plan.

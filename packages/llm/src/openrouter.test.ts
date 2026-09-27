@@ -64,4 +64,18 @@ describe("openrouter provider", () => {
     await expect(p.streamStep(req, () => {})).rejects.toMatchObject({ code: "llm_error" });
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it("caps the reply length: per call, else the provider default", async () => {
+    const { p, create } = provider([[text("a")], [text("b")]]);
+    await p.streamStep({ ...req, maxTokens: 500 }, () => {});
+    await p.streamStep(req, () => {});
+    expect(create.mock.calls.map((c) => (c as unknown as [{ max_tokens?: number }])[0].max_tokens)).toEqual([500, undefined]);
+  });
+
+  it("says the chat is too long when the model rejects the prompt size, without retrying", async () => {
+    const tooLong = Object.assign(new Error("This endpoint's maximum context length is 32768 tokens"), { status: 400 });
+    const { p, create } = provider([tooLong]);
+    await expect(p.streamStep(req, () => {})).rejects.toMatchObject({ code: "llm_context_too_long", retryable: false });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
 });

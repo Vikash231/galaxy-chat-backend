@@ -65,7 +65,7 @@ function ports(llm: LlmProvider, tools: ToolPorts, over: Partial<TurnPorts> = {}
     llm, tools, parts, checkpoints,
     toolSpecs: [],
     maxSteps: 8,
-    history: async () => [{ role: "user", content: [{ type: "text", text: "crop it" }] }],
+    history: async () => ({ messages: [{ role: "user", content: [{ type: "text", text: "crop it" }] }] }),
     emit: (p) => parts.push(p),
     meta: () => {},
     checkpoint: async (b) => void checkpoints.push(structuredClone(b)),
@@ -170,14 +170,14 @@ describe("file names", () => {
   it("resolves a file name to its real URL before the tool runs", async () => {
     const { llm } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs(0, "img_1") }] }), step({ text: "done" })]);
     const tools = fakeTools();
-    await runAgentTurn(ports(llm, tools, { history: async () => attached }));
+    await runAgentTurn(ports(llm, tools, { history: async () => ({ messages: attached }) }));
     expect(tools.upsert).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ image: "https://files.example/u/cat-long-random-9f8e7d6c5b4a.jpg" }) }));
   });
 
   it("rejects an unknown name and tells the model which files exist", async () => {
     const { llm, seen } = fakeLlm([step({ toolCalls: [{ id: "c1", name: "crop_image", argsJson: cropArgs(0, "img_9") }] }), step({ text: "Which image?" })]);
     const tools = fakeTools();
-    await runAgentTurn(ports(llm, tools, { history: async () => attached }));
+    await runAgentTurn(ports(llm, tools, { history: async () => ({ messages: attached }) }));
     expect(tools.dispatch).not.toHaveBeenCalled();
     expect((seen[1]!.at(-1) as { content: string }).content).toContain("Unknown file img_9. Files in this chat: img_1.");
   });
@@ -185,7 +185,7 @@ describe("file names", () => {
   it("gives every result its own name and shows the model names, never URLs", async () => {
     const calls = [0, 1, 2].map((i) => ({ id: `c${i}`, name: "crop_image", argsJson: cropArgs(i, "img_1") }));
     const { llm, seen } = fakeLlm([step({ toolCalls: calls }), step({ text: "done" })]);
-    const out = await runAgentTurn(ports(llm, fakeTools(), { history: async () => attached }));
+    const out = await runAgentTurn(ports(llm, fakeTools(), { history: async () => ({ messages: attached }) }));
     const refs = out.blocks.flatMap((b) => (b.type === "asset" ? [b.ref] : []));
     expect(new Set(refs).size).toBe(3);
     const toolMessages = seen[1]!.filter((m) => m.role === "tool").map((m) => (m as { content: string }).content).join(" ");
@@ -382,7 +382,7 @@ describe("waitpoints", () => {
       { type: "attachment", attachmentId: "a2", ref: "vid_2", kind: "video", url: "https://cdn/b.mp4", name: "b.mp4", mime: "video/mp4", width: 1, height: 1 },
       { type: "text", text: "merge" },
     ] }];
-    await runAgentTurn(ports(llm, fakeTools({ ask }), { history: async () => attached }));
+    await runAgentTurn(ports(llm, fakeTools({ ask }), { history: async () => ({ messages: attached }) }));
     expect(ask.mock.calls[0]![1]).toMatchObject({ kind: "media", files: [{ name: "vid_1", url: "https://cdn/a.mp4", kind: "video" }, { name: "vid_2", url: "https://cdn/b.mp4", kind: "video" }] });
   });
 
@@ -551,6 +551,8 @@ describe("waitpoints", () => {
       ["steps whose text is called description", { summary: "Fox", steps: [{ description: "Generate the image" }] }],
       ["a missing summary", { steps: [gptStep] }],
       ["args already given as a string", { summary: "Fox", steps: [{ ...gptStep, args: JSON.stringify(gptStep.args) }] }],
+      ["null tool and args on a free step", { summary: "Respond to a casual greeting", steps: [{ text: "Reply hello", tool: null, args: null }] }],
+      ["an empty tool name", { summary: "Fox", steps: [{ text: "Think", tool: "", args: "" }, gptStep] }],
     ];
     it.each(shapes)("accepts a plan with %s", async (_name, args) => {
       const { ask, approvals } = planRun();

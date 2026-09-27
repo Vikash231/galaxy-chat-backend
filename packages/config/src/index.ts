@@ -44,8 +44,19 @@ export const WorkerEnv = z.object({
   AGENT_MAX_STEPS: int(8),
   // How long an unanswered question stays open, and the step cost at which the agent asks before spending.
   WAITPOINT_TTL_SECONDS: int(600),
-  CREDIT_APPROVAL_MICRO: micro.default(50_000n),
-  AGENT_HISTORY_LIMIT: int(40),
+  CREDIT_APPROVAL_MICRO: micro.default(20_000n),
+  // History sent to the model: at most this many messages, trimmed to about this many tokens (newest turns kept).
+  AGENT_HISTORY_LIMIT: int(200),
+  AGENT_HISTORY_TOKENS: int(24_000),
+  LLM_MAX_TOKENS: int(8_192),
+  // Rolling summary: after a reply whose prompt passed LIMIT_TOKENS, or with more than LIMIT_MESSAGES messages
+  // since the last summary, fold older messages into a summary and keep the newest KEEP_MESSAGES (fewer if
+  // they would push the next prompt past TARGET_TOKENS).
+  SUMMARY_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  SUMMARY_LIMIT_TOKENS: int(16_000),
+  SUMMARY_LIMIT_MESSAGES: int(40),
+  SUMMARY_KEEP_MESSAGES: int(10),
+  SUMMARY_TARGET_TOKENS: int(6_000),
   AGENT_QUEUE_CONCURRENCY: int(50),
   TOOL_QUEUE_CONCURRENCY: int(10),
 });

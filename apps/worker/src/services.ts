@@ -15,7 +15,7 @@ export const getLlm = () =>
   (llm ??=
     process.env.LLM_FIXTURE === "scripted"
       ? createScriptedProvider()
-      : createOpenRouterProvider({ apiKey: workerEnv().OPENROUTER_API_KEY, baseURL: workerEnv().OPENROUTER_BASE_URL, model: workerEnv().OPENROUTER_MODEL }));
+      : createOpenRouterProvider({ apiKey: workerEnv().OPENROUTER_API_KEY, baseURL: workerEnv().OPENROUTER_BASE_URL, model: workerEnv().OPENROUTER_MODEL, maxTokens: workerEnv().LLM_MAX_TOKENS }));
 
 export const getMagica = () =>
   (magica ??= createMagicaClient({ apiKey: workerEnv().MAGICA_API_KEY, baseUrl: workerEnv().MAGICA_BASE_URL, mode: workerEnv().MAGICA_MODE }));

@@ -1,5 +1,5 @@
 import { AbortTaskRunError, task } from "@trigger.dev/sdk";
-import { runAgentTurn, type ToolPorts } from "@gx/agent";
+import { needsSummary, runAgentTurn, type ToolPorts } from "@gx/agent";
 import { workerEnv } from "@gx/config";
 import { AGENT_TURN_TASK, type ContentBlock, type SafeError, type WaitpointRequest } from "@gx/contracts";
 import {
@@ -9,12 +9,11 @@ import {
   finishInvocation,
   getBalance,
   isTerminalRun,
-  loadHistory,
+  loadChatContext,
+  nameChatFiles,
   loadRun,
   markDispatching,
-  prisma,
   readError,
-  reserveFileRefs,
   recordRunSkill,
   saveCancelledMessage,
   spentEstimateMicro,
@@ -35,6 +34,7 @@ import { agentTurns } from "../../queues";
 import { getLlm, getSkills } from "../../services";
 import { assistantStream } from "../../streams";
 import { magicaRun } from "../tools/magica-run";
+import { chatSummary, summaryLimits } from "./chat-summary";
 
 export type AgentTurnPayload = { runId: string };
 
@@ -62,6 +62,7 @@ export const agentTurn = task({
     meta.set({ status: "thinking", step: 0 });
     const stream = createCoalescer((p) => assistantStream.append(p), (e) => log.warn({ err: e }, "stream.append_failed"));
     let saved: ContentBlock[] = [];
+    const size = { lastPromptTokens: 0, messagesSinceSummary: 0 };
     log.info("run.started");
 
     try {
@@ -76,7 +77,13 @@ export const agentTurn = task({
         tools: toolPorts(run, meta, log),
         maxSteps: env.AGENT_MAX_STEPS,
         signal,
-        history: () => loadHistory(run.chatId, env.AGENT_HISTORY_LIMIT),
+        historyTokens: env.AGENT_HISTORY_TOKENS,
+        history: async () => {
+          const chat = await loadChatContext(run.chatId, env.AGENT_HISTORY_LIMIT);
+          size.messagesSinceSummary = chat.messages.length + 1; // + this reply
+          log.info({ messages: chat.messages.length, files: chat.files.length, summary: !!chat.summary }, "context.loaded");
+          return chat;
+        },
         emit: (p) => stream.push(p),
         meta: (patch) => meta.set(patch),
         checkpoint: async (blocks, step, llm) => {
@@ -85,6 +92,7 @@ export const agentTurn = task({
           await stream.flush();
           await checkpointMessage(message.id, saved, step);
           if (llm) {
+            size.lastPromptTokens = llm.usage.promptTokens;
             await recordStep(runId, step, llm.model, llm.usage.promptTokens, llm.usage.completionTokens);
             log.info({ step, model: llm.model, toolCalls: llm.toolCalls.length }, "llm.step");
           }
@@ -95,7 +103,8 @@ export const agentTurn = task({
       await transitionRun(runId, outcome.status, { error: outcome.error ?? null });
       meta.set({ status: outcome.status === "completed" ? "complete" : "failed", error: outcome.error, label: undefined });
       await meta.flush();
-      log.info({ status: outcome.status }, "run.finished");
+      log.info({ status: outcome.status, lastPromptTokens: size.lastPromptTokens }, "run.finished");
+      await maybeSummarise(run.chatId, runId, size, log);
       return { status: outcome.status };
     } catch (e) {
       const cancelled = signal.aborted;
@@ -125,6 +134,17 @@ export const agentTurn = task({
   },
 });
 
+/** Start the background summary when the chat has grown past a limit; a failure here never fails the reply. */
+async function maybeSummarise(chatId: string, runId: string, size: { lastPromptTokens: number; messagesSinceSummary: number }, log: Logger) {
+  if (!workerEnv().SUMMARY_ENABLED || !needsSummary(size, summaryLimits())) return;
+  try {
+    await chatSummary.trigger({ chatId }, { idempotencyKey: `summary:${runId}`, concurrencyKey: chatId });
+    log.info(size, "chat.summary_queued");
+  } catch (e) {
+    log.warn({ err: e }, "chat.summary_queue_failed");
+  }
+}
+
 /** On a retry: tell the model the last try stopped, so it continues instead of starting over and paying again. */
 async function retryNoteFor(previousRunId: string | null): Promise<string | undefined> {
   if (!previousRunId) return undefined;
@@ -143,7 +163,7 @@ function toolPorts(run: { id: string; userId: string; chatId: string; planMode: 
       approvedCapMicro: () => approvedCapMicro(run.id),
       spentMicro: () => spentEstimateMicro(run.id),
     },
-    reserveFileRefs: (kinds) => reserveFileRefs(prisma, run.chatId, kinds),
+    reserveFileRefs: (files) => nameChatFiles(run.chatId, files),
     balance: () => getBalance(run.userId),
     upsert: async (i) => {
       const row = await upsertInvocation({ runId: run.id, ...i });

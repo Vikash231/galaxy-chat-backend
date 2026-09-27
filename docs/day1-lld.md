@@ -340,7 +340,7 @@ interface LlmProvider {
 ### 5.2 `src/agent/loop.ts`: pure logic that doesn't call Trigger.dev directly
 ```ts
 async function runAgentTurn(ctx: TurnCtx): Promise<TurnResult> {
-  const messages = await ctx.history.load();                 // last 40 msgs, bounded, mapped from ContentBlock[]
+  const messages = await ctx.history.load();                 // summary + messages after it, token-budgeted (plans/07)
   for (let step = 0; step < MAX_STEPS /* 8 */; step++) {
     ctx.meta.set({ status: "thinking", step });
     const { text, thinking, toolCalls, model, usage } = await ctx.llm.streamStep(messages, ctx.stream, step);

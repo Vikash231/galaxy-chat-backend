@@ -78,6 +78,8 @@ model Chat {
   updatedAt DateTime   @updatedAt
   messages  Message[]
   runs      AgentRun[]
+  files     ChatFile[]
+  summaries ChatSummary[]
 
   @@index([userId, updatedAt(sort: Desc), id(sort: Desc)])
   @@index([userId, pinned, updatedAt(sort: Desc), id(sort: Desc)])
@@ -116,7 +118,8 @@ model AgentRun {
   triggerRunId     String?          @unique
   steps            Int              @default(0)
   routedModels     String[]
-  promptTokens     Int              @default(0)
+  promptTokens     Int              @default(0) // sum over all LLM calls of the run (usage)
+  lastPromptTokens Int              @default(0) // prompt size of the latest LLM call: how big the chat is now
   completionTokens Int              @default(0)
   errorCode        String?
   errorMessage     String?
@@ -244,4 +247,37 @@ model ProviderSpendDaily {
   spentMicro BigInt   @default(0)
 
   @@id([provider, day])
+}
+
+// A file the agent can name in a chat (upload or tool result). Tools and the prompt read names from here, so a
+// file stays usable after its message is trimmed or summarised away.
+model ChatFile {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  ref         String // img_3
+  kind        String // image | video | audio
+  url         String
+  name        String? // uploaded file name
+  tool        String? // tool that made it
+  durationSec Float?
+  createdAt   DateTime @default(now())
+
+  @@unique([chatId, ref])
+}
+
+// A summary of a chat's older messages. The model gets the latest one plus the messages after upToMessageId.
+model ChatSummary {
+  id            String   @id @default(cuid())
+  chatId        String
+  chat          Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  content       String
+  upToMessageId String
+  upToCreatedAt DateTime
+  tokens        Int // estimated size of the summary text (what it adds to each prompt)
+  model         String
+  createdAt     DateTime @default(now())
+
+  @@unique([chatId, upToMessageId])
+  @@index([chatId, upToCreatedAt(sort: Desc)])
 }

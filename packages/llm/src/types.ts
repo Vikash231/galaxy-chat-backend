@@ -20,7 +20,7 @@ export type StepResult = {
   finishReason: string | null;
 };
 
-export type StepRequest = { messages: LlmMessage[]; tools: LlmToolSpec[]; signal?: AbortSignal };
+export type StepRequest = { messages: LlmMessage[]; tools: LlmToolSpec[]; signal?: AbortSignal; /** Reply length cap; the provider default applies when unset. */ maxTokens?: number };
 
 /** Provider-neutral contract the agent loop depends on. */
 export interface LlmProvider {
@@ -29,7 +29,7 @@ export interface LlmProvider {
 
 export class LlmError extends Error {
   constructor(
-    readonly code: "llm_unavailable" | "llm_empty_response" | "llm_error",
+    readonly code: "llm_unavailable" | "llm_empty_response" | "llm_context_too_long" | "llm_error",
     message: string,
     readonly retryable: boolean,
   ) {

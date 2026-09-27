@@ -8,7 +8,9 @@ import { listMessages } from "./messages";
 import { listChats, getOwnedChat, updateChat, deleteChat, createChat, MAX_PINNED } from "./chats";
 import { settleToolCharge, reserveProviderSpend, adjustProviderSpend } from "./credits";
 import { finishInvocation, inFlightProviderCalls, markDispatching, markRunning, upsertInvocation } from "./tools";
-import { reserveFileRefs } from "./attachments";
+import { reserveFileRefs, saveAttachments } from "./attachments";
+import { loadChatContext, nameChatFiles, saveSummary } from "./context";
+import { recordStep } from "./runs";
 import { recordRunSkill } from "./skills";
 import { answerWaitpoint, approvedCapMicro, expireWaitpoint, getOwnedWaitpoint, pendingWaitpoint, spentEstimateMicro, upsertWaitpoint } from "./waitpoints";
 import { cancelRun, getRunView } from "./runs";
@@ -124,6 +126,47 @@ describe("file names", () => {
     expect(await reserveFileRefs(prisma, a.chat.id, ["image"])).toEqual(["img_1"]);
     expect(await reserveFileRefs(prisma, b.chat.id, ["image"])).toEqual(["img_1"]);
     expect(await reserveFileRefs(prisma, a.chat.id, ["image"])).toEqual(["img_2"]);
+  });
+});
+
+describe("chat context", () => {
+  it("records uploads and tool results as chat files", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const [a] = await saveAttachments([{ userId: user.id, assemblyId: "as1", transloaditFileId: "f1", kind: "image", name: "tiger.png", mime: "image/png", sizeBytes: 10, width: 4, height: 4, durationSec: null, url: "https://cdn/t.png", persistent: false }]);
+    await admitTurn({ userId: user.id, chatId: chat.id, clientMessageId: randomUUID(), text: "look", attachmentIds: [a!.id] });
+    expect(await nameChatFiles(chat.id, [{ kind: "video", url: "https://cdn/m.mp4", tool: "merge_videos", durationSec: 12 }])).toEqual(["vid_2"]);
+    const { files } = await loadChatContext(chat.id, 50);
+    expect(files).toMatchObject([
+      { ref: "img_1", kind: "image", name: "tiger.png", url: "https://cdn/t.png" },
+      { ref: "vid_2", kind: "video", tool: "merge_videos", durationSec: 12 },
+    ]);
+  });
+
+  it("loads the latest summary and only the messages after it, oldest first", async () => {
+    const { chat } = await seedUserWithChat();
+    const at = (s: number) => new Date(Date.UTC(2026, 8, 27, 0, 0, s));
+    const ids = [];
+    for (let i = 0; i < 6; i++)
+      ids.push((await prisma.message.create({ data: { chatId: chat.id, role: i % 2 ? "assistant" : "user", content: [{ type: "text", text: `m${i}` }], createdAt: at(i) } })).id);
+    await prisma.message.create({ data: { chatId: chat.id, role: "assistant", status: "streaming", content: [], createdAt: at(9) } });
+    const base = { chatId: chat.id, tokens: 5, model: "m" };
+    await saveSummary({ ...base, content: "first", upToMessageId: ids[1]!, upToCreatedAt: at(1) });
+    const second = { ...base, content: "second", upToMessageId: ids[3]!, upToCreatedAt: at(3) };
+    await saveSummary(second);
+    await saveSummary({ ...second, content: "retried" }); // same cut point: kept once, first write wins
+    const ctx = await loadChatContext(chat.id, 50);
+    expect(ctx.summary).toBe("second");
+    expect(ctx.messages.map((m) => m.content[0])).toEqual([{ type: "text", text: "m4" }, { type: "text", text: "m5" }]);
+    expect(await prisma.chatSummary.count()).toBe(2);
+    expect((await loadChatContext(chat.id, 1)).messages.map((m) => m.id)).toEqual([ids[5]]);
+  });
+
+  it("keeps the latest call's prompt size apart from the run total", async () => {
+    const { user, chat } = await seedUserWithChat();
+    const { runId } = await send(user.id, chat.id);
+    await recordStep(runId, 0, "m", 3_000, 10);
+    await recordStep(runId, 1, "m", 3_400, 10);
+    expect(await prisma.agentRun.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({ promptTokens: 6_400, lastPromptTokens: 3_400 });
   });
 });
 

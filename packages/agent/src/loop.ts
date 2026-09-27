@@ -1,8 +1,8 @@
 import type { ContentBlock, RunMeta, SafeError, StreamPart } from "@gx/contracts";
 import type { LlmMessage, LlmProvider, LlmToolSpec, StepResult } from "@gx/llm";
 import { executeTools, type ExecutedCall, type PendingCall, type ToolPorts } from "./executor";
-import { collectAliases, collectDurations, collectFiles, hideFileNames } from "./files";
-import { toLlmMessages, type StoredMessage } from "./history";
+import { fileContext, hideFileNames, olderFileLines, type KnownFile } from "./files";
+import { fitHistory, type StoredMessage } from "./history";
 import { llmCallId, toolCallKey } from "./ids";
 
 const BASE_PROMPT = [
@@ -12,26 +12,36 @@ const BASE_PROMPT = [
   "If the user asks to edit an image but none is attached, ask them to attach one.",
   "To create a new image, call gpt_image_2 with only a prompt; to change an existing image, also pass its name in images.",
   "To join videos end to end, call merge_videos with their names in the order the user wants.",
-  "If the user's wording about order, or about which file is which, is unclear and a wrong guess would cost credits, call ask_user with the choices (or the files) instead of guessing.",
+  "If the user's wording about order, or about which file is which, is unclear and a wrong guess would cost credits, call ask_user with the choices (or the files) instead of guessing. Never ask which file in plain text: you cannot name files to the user, so always call ask_user with files so they can pick from previews.",
   'After merging, say the final order in plain words, e.g. "the 6-second clip, then the 15-second clip".',
   "In replies, describe files by what they show; never mention their names like img_1 to the user.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",
 ].join(" ");
 
 const PLAN_MODE_PROMPT =
-  "PLAN MODE is on. Before any tool that costs credits, call propose_plan with a short summary and the steps; give tool and args (as JSON) for every step that uses a tool, so the cost can be shown. Paid tools are blocked until the user approves. After approval, carry out the plan. If the approval includes a note from the user, the note is part of the plan: apply it to the tool arguments (for example, add it to the prompt) before calling the tool.";
+  "PLAN MODE is on. A request that needs no paid tool (a greeting, a question) gets a direct reply with no plan. Before any tool that costs credits, call propose_plan with a short summary and the steps; give tool and args (as JSON) for every step that uses a tool, so the cost can be shown. Paid tools are blocked until the user approves. After approval, carry out the plan. If the approval includes a note from the user, the note is part of the plan: apply it to the tool arguments (for example, add it to the prompt) before calling the tool.";
 
-/** Base instructions plus the skills list (names and descriptions only, never the guides themselves) and the plan-mode rule. */
-export function systemPrompt(skills: string[] = [], planMode = false): string {
-  const base = planMode ? `${BASE_PROMPT} ${PLAN_MODE_PROMPT}` : BASE_PROMPT;
-  if (!skills.length) return base;
-  return [
-    base,
-    "Skills are free guides for specific kinds of work. When a request matches one, call load_skill before acting, then follow it; read its extra files with read_skill_asset only when the guide asks.",
-    "Skills:",
-    ...skills,
-  ].join("\n");
+/**
+ * Base instructions, the skills list (names and descriptions only), then what changes more often: the summary of
+ * older messages, files the sent history no longer shows, and the plan-mode rule. Stable text first lets a
+ * provider reuse its cached prefix.
+ */
+export function systemPrompt(skills: string[] = [], planMode = false, extra: { summary?: string | null; olderFiles?: string[] } = {}): string {
+  const parts = [BASE_PROMPT];
+  if (skills.length)
+    parts.push(
+      "Skills are free guides for specific kinds of work. When a request matches one, call load_skill before acting, then follow it; read its extra files with read_skill_asset only when the guide asks.",
+      "Skills:",
+      ...skills,
+    );
+  if (extra.summary) parts.push(`Summary of the earlier conversation (those messages are not shown):\n${extra.summary}`);
+  if (extra.olderFiles?.length) parts.push("Files from earlier in this chat (use these names with tools):", ...extra.olderFiles);
+  if (planMode) parts.push(PLAN_MODE_PROMPT);
+  return parts.join("\n");
 }
+
+/** What the model sees of the chat: a summary of older messages, the messages after it, and the chat's files. */
+export type ChatContext = { messages: StoredMessage[]; summary?: string | null; files?: KnownFile[] };
 
 export interface TurnPorts {
   llm: LlmProvider;
@@ -44,8 +54,10 @@ export interface TurnPorts {
   planMode?: boolean;
   /** Set on a retry: one line for the model (not saved) saying the last try stopped and what not to repeat. */
   retryNote?: string;
+  /** Token budget for the sent history (estimated); the newest turns are always sent. */
+  historyTokens?: number;
   signal?: AbortSignal;
-  history(): Promise<StoredMessage[]>;
+  history(): Promise<ChatContext>;
   emit(part: StreamPart): void;
   meta(patch: Partial<Pick<RunMeta, "status" | "step" | "label">>): void;
   /** Persist all blocks produced so far; called at step boundaries only. */
@@ -56,11 +68,14 @@ export type TurnOutcome = { status: "completed" | "failed"; blocks: ContentBlock
 
 export async function runAgentTurn(p: TurnPorts): Promise<TurnOutcome> {
   const blocks: ContentBlock[] = [];
-  const history = await p.history();
-  const fileCtx = { files: collectFiles(history), aliases: collectAliases(history), durations: collectDurations(history) };
+  const chat = await p.history();
+  const fileCtx = fileContext(chat.messages, chat.files);
+  const history = fitHistory(chat.messages, p.historyTokens ?? Number.POSITIVE_INFINITY);
   const usage = { type: "usage" as const, creditsMicro: 0, promptTokens: 0, completionTokens: 0, models: [] as string[] };
   const finish = (o: Omit<TurnOutcome, "blocks">): TurnOutcome => ({ ...o, blocks: [...blocks, usage] });
-  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(p.skills, p.planMode) }, ...toLlmMessages(history)];
+  const olderFiles = olderFileLines(chat.files ?? [], JSON.stringify(history.messages));
+  const system = systemPrompt(p.skills, p.planMode, { summary: chat.summary, olderFiles });
+  const messages: LlmMessage[] = [{ role: "system", content: system }, ...history.messages];
   if (p.retryNote) messages.push({ role: "user", content: p.retryNote });
 
   for (let step = 0; step < p.maxSteps; step++) {

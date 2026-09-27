@@ -44,17 +44,6 @@ export async function listMessages(userId: string, chatId: string, q: PageQuery)
   return { items: page.items.map(toMessageView), nextCursor: page.nextCursor };
 }
 
-/** The last `limit` messages of a chat in chronological order, for the LLM context window. */
-export async function loadHistory(chatId: string, limit: number) {
-  const rows = await prisma.message.findMany({
-    where: { chatId, status: { in: ["success", "failed", "cancelled"] } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit,
-    select: { role: true, content: true },
-  });
-  return rows.reverse().map((r) => ({ role: r.role, content: readContent(r.content) }));
-}
-
 export async function upsertAssistantMessage(chatId: string, runId: string) {
   return prisma.message.upsert({
     where: { runId },

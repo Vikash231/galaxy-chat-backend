@@ -1,6 +1,7 @@
 import type { ContentBlock, SafeError, ToolStatus, WaitpointRequest } from "@gx/contracts";
 import { getTool, parseArgs, type AnyTool, type AskResult, type Asset } from "@gx/tools";
 import { withRefs } from "./files";
+import { capToolContent } from "./history";
 
 export type Invocation = { id: string; status: ToolStatus; output: unknown; creditsMicro: bigint; durationMs?: number | null; error: SafeError | null };
 export type ToolOutcome = { status: "completed" | "failed" | "cancelled"; output?: unknown; creditsMicro: bigint; durationMs?: number; error?: SafeError };
@@ -17,8 +18,8 @@ export interface ToolPorts {
   /** Run-level approval state, read from Postgres so it survives a suspend. Absent = no approvals. */
   approvals?: Approvals;
   settle(toolInvocationId: string, creditsMicro: bigint): Promise<void>;
-  /** Reserve chat-unique names (img_4, …) for new result files. */
-  reserveFileRefs(kinds: ("image" | "video" | "audio")[]): Promise<string[]>;
+  /** Name new result files (img_4, …) and record them for the chat. */
+  reserveFileRefs(files: (Asset & { tool: string })[]): Promise<string[]>;
   update(key: string, patch: { name: string; seq: number; status: ToolStatus; credits?: string; durationMs?: number; assetUrl?: string; assetKind?: Asset["kind"]; error?: SafeError; label?: string }): void;
 }
 
@@ -109,7 +110,7 @@ async function executeOne(ports: ToolPorts, { call, tool, args, estimate }: Prep
   }
 
   const assets = tool.assets(outcome.output);
-  const refs = await ports.reserveFileRefs(assets.map((a) => a.kind));
+  const refs = await ports.reserveFileRefs(assets.map((a) => ({ ...a, tool: tool.name })));
   assets.forEach((a, i) => {
     files.set(refs[i]!, a.url);
     if (a.durationSec != null) durations.set(a.url, a.durationSec);
@@ -121,7 +122,7 @@ async function executeOne(ports: ToolPorts, { call, tool, args, estimate }: Prep
       { type: "tool_result", toolCallId: call.key, status: "completed", output: outcome.output, ...costFields(outcome) },
       ...assets.map((a, i) => ({ type: "asset" as const, kind: a.kind, url: a.url, toolCallId: call.key, ref: refs[i], ...(a.durationSec != null && { durationSec: a.durationSec }) })),
     ],
-    llmContent: JSON.stringify(withRefs(outcome.output, new Map(assets.map((a, i) => [a.url, refs[i]!])))),
+    llmContent: capToolContent(JSON.stringify(withRefs(outcome.output, new Map(assets.map((a, i) => [a.url, refs[i]!]))))),
     creditsMicro: outcome.creditsMicro,
     ...(tool.endsTurn && { end: tool.endsTurn(outcome.output) }),
   };
