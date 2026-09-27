@@ -12,7 +12,7 @@ const BASE_PROMPT = [
   "If the user asks to edit an image but none is attached, ask them to attach one.",
   "To create a new image, call gpt_image_2 with only a prompt; to change an existing image, also pass its name in images.",
   "To join videos end to end, call merge_videos with their names in the order the user wants.",
-  "If the user's wording about order, or about which file is which, is unclear and a wrong guess would cost credits, call ask_user with the choices (or the files) instead of guessing. Never ask which file in plain text: you cannot name files to the user, so always call ask_user with files so they can pick from previews.",
+  "If the user's wording about order, or about which file is which, is unclear and a wrong guess would cost credits, call ask_user instead of guessing. ask_user takes one pick, so ask one question with one answer; with files, ask for what the task needs, e.g. \"Which clip should come first?\", never \"which is X and which is Y\". Never ask about files in plain text: you cannot name files to the user, so call ask_user with files so they can pick from previews.",
   'After merging, say the final order in plain words, e.g. "the 6-second clip, then the 15-second clip".',
   "In replies, describe files by what they show; never mention their names like img_1 to the user.",
   "After a tool succeeds, reply in one or two sentences; the app displays the resulting file.",

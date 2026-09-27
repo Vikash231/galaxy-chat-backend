@@ -81,7 +81,7 @@ export function interactionTools(deps: Deps): AnyTool[] {
   const askOutput = z.object({ status: z.enum(["answered", "expired", "cancelled"]), choice: z.string().optional() });
   const askUser: ToolDef<typeof askArgs, z.infer<typeof askOutput>> = {
     name: "ask_user",
-    description: "Ask the user to pick one of several options, or one of several files, when a wrong guess would waste credits. Free. Give options or files, not both. Waits for the answer.",
+    description: "Ask the user to pick one of several options, or one of several files, when a wrong guess would waste credits. The user picks exactly one, so ask a question with a single answer (e.g. \"Which clip should come first?\"). Free. Give options or files, not both. Waits for the answer.",
     label: "Waiting for your answer",
     args: askArgs,
     output: askOutput,

@@ -4,7 +4,7 @@ description: Planning a montage with Merge Videos, including clip order, fade or
 ---
 # Video montages
 
-1. Order: use the order the user states. If they refer to clips by content ("the tiger clip first") and the file names do not make it clear, call ask_user with the clip files (never a text question) to ask which clip is which before merging; a merge costs credits and cannot be undone.
+1. Order: use the order the user states. If they refer to clips by content ("the tiger clip first") and the file names do not make it clear, call ask_user with the clip files and the question "Which clip should come first?" (with more clips, ask for the next position after each answer). Never ask "which is X and which is Y": the user can pick only one file. A merge costs credits and cannot be undone.
 2. With no stated order, keep the order the clips were attached.
 3. Transition:
    - `none` for fast-paced edits, tutorials, or when the user says nothing about transitions.
