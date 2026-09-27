@@ -44,7 +44,7 @@ export const WorkerEnv = z.object({
   AGENT_MAX_STEPS: int(8),
   // How long an unanswered question stays open, and the step cost at which the agent asks before spending.
   WAITPOINT_TTL_SECONDS: int(600),
-  CREDIT_APPROVAL_MICRO: micro.default(20_000n),
+  CREDIT_APPROVAL_MICRO: micro.default(10_000n),
   // History sent to the model: at most this many messages, trimmed to about this many tokens (newest turns kept).
   AGENT_HISTORY_LIMIT: int(200),
   AGENT_HISTORY_TOKENS: int(24_000),
